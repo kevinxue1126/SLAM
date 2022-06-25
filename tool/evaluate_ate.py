@@ -1,25 +1,25 @@
 #!/usr/bin/python
 # -*- coding:utf-8 -*-
-# 评估 估计的estimated位姿轨迹与真实ground truth位姿轨迹的 绝对差值======
+# The absolute difference between the estimated estimated pose trajectory and the ground truth pose trajectory
 # Software License Agreement (BSD License)
 #
 # Copyright (c) 2013, Juergen Sturm, TUM
 # All rights reserved.
 
-# 依赖 Requirements: 
+# Rely Requirements: 
 # sudo apt-get install python-argparse
 
-# 用法 
+# Usage 
 # python evaluate_ate.py gt.txt est.txt
-# --plot3D 画3D轨迹匹配图
-# --verbose 显示所有误差信息 均方根 均值 中值 标准差 最大值最小值
+# --plot3D Draw a 3D trajectory matching map
+# --verbose Displays rms, mean, median, standard deviation, maximum and minimum values for all error information
 
 import sys
 import numpy
 import argparse
 import associate
 
-# 相似变换误差==
+# Similarity Transformation Error
 def align_sim3(model, data):
     """Implementation of the paper: S. Umeyama, Least-Squares Estimation
        of Transformation Parameters Between Two Point Patterns,
@@ -62,40 +62,39 @@ def align_sim3(model, data):
     #return s, R, t #, t_error
     return s, R, t, t_erro
 
-# 欧式变换误差
+# Euclidean Transform Error
 """
-由于真实轨迹录制时的坐标系和算法一开始的坐标系存在差异，
-所以算法估计的相机轨迹和真实轨迹之间存在一个欧式变换，
-所以按照对估计值和真实值进行配准后，
-需要求解真实值和匹配的估计值之间的一个欧式变换。
+Since the coordinate system of the real trajectory recording is different from the coordinate system at the beginning of the algorithm, 
+there is a Euclidean transformation between the camera trajectory estimated by the algorithm and the real trajectory. 
+An Euclidean transformation between the value and the matched estimate.
 
-对估计值进行变换后再与真实值计算差值。
+The estimated value is transformed and then the difference is calculated with the true value.
 
 """
 def align(model,data):
     """Align two trajectories using the method of Horn (closed-form).
-    匹配误差计算====
+    Matching Error Calculation
     Input:
-    model -- first trajectory (3xn)    估计值
-    data -- second trajectory (3xn)    真值=
+    model -- first trajectory (3xn)    estimated value
+    data -- second trajectory (3xn)    truth value
     
     Output:
-    rot -- rotation matrix (3x3)    两数据的旋转平移矩阵
+    rot -- rotation matrix (3x3)    Rotation and translation matrix of two data
     trans -- translation vector (3x1)
-    trans_error -- translational error per point (1xn) 匹配误差
+    trans_error -- translational error per point (1xn) match error
     
     """
     numpy.set_printoptions(precision=3,suppress=True)
-    model_zerocentered = model - model.mean(1) # 去均值===
+    model_zerocentered = model - model.mean(1) # de-mean
     data_zerocentered = data - data.mean(1)
     
     W = numpy.zeros( (3,3) )# 
     for column in range(model.shape[1]):
         W += numpy.outer(model_zerocentered[:,column],data_zerocentered[:,column])
-        # outer() 前一个参数表示 后一个参数扩大倍数
+        # outer() The former parameter indicates that the latter parameter expands the multiple
         # https://blog.csdn.net/hqh131360239/article/details/79064592
-    U,d,Vh = numpy.linalg.linalg.svd(W.transpose())# 奇异值分解
-    S = numpy.matrix(numpy.identity( 3 ))# 单位阵
+    U,d,Vh = numpy.linalg.linalg.svd(W.transpose())# singular value decomposition
+    S = numpy.matrix(numpy.identity( 3 ))# unit array
     if(numpy.linalg.det(U) * numpy.linalg.det(Vh)<0):
         S[2,2] = -1
     rot = U*S*Vh
@@ -176,7 +175,7 @@ def plot_traj3D(ax,stamps,traj,style,color,label):
 
 if __name__=="__main__":
     # parse command line
-    # 解析命令行参数
+    # Parse command line arguments
     parser = argparse.ArgumentParser(description='''
     This script computes the absolute trajectory error from the ground truth trajectory and the estimated trajectory. 
     ''')
@@ -192,24 +191,24 @@ if __name__=="__main__":
     parser.add_argument('--verbose', help='print all evaluation data (otherwise, only the RMSE absolute translational error in meters after alignment will be printed)', action='store_true')
     args = parser.parse_args()
     
-    # 读取数据
+    # read data
     first_list = associate.read_file_list(args.first_file)
     second_list = associate.read_file_list(args.second_file)
     
-    # 按照时间戳进行匹配，最大差值不能超过 max_difference 0.02
+    # Match according to timestamp, the maximum difference cannot exceed max_difference 0.02
     # 
     matches = associate.associate(first_list, second_list,float(args.offset),float(args.max_difference))    
     if len(matches)<2:
         sys.exit("Couldn't find matching timestamp pairs between groundtruth and estimated trajectory! Did you choose the correct sequence?")
     
-    # 按照匹配对 仅取出x、y、z位置信息
+    # By matching pair
     first_xyz = numpy.matrix([[float(value) for value in first_list[a][0:3]] for a,b in matches]).transpose()
     second_xyz = numpy.matrix([[float(value)*float(args.scale) for value in second_list[b][0:3]] for a,b in matches]).transpose()
     
-    # 对匹配后的位置坐标求解误差====
+    # Solve the error for the matched position coordinates
     rot,trans,trans_error = align(second_xyz,first_xyz)
     
-    # 相互匹配误差线  
+    # Mutual match error bars  
     second_xyz_aligned = rot * second_xyz + trans
     first_stamps = first_list.keys()
     first_stamps.sort()
@@ -221,17 +220,17 @@ if __name__=="__main__":
     
     if args.verbose:
         print "compared_pose_pairs %d pairs"%(len(trans_error))
-        # 均方根误差 误差平方均值 再开根号
+        # Root mean square error
         print "absolute_translational_error.rmse %f m"%numpy.sqrt(numpy.dot(trans_error,trans_error) / len(trans_error))
-        # 误差均值
+        # Error mean
         print "absolute_translational_error.mean %f m"%numpy.mean(trans_error)
-        # 误差中值
+        # Median error
         print "absolute_translational_error.median %f m"%numpy.median(trans_error)
-        # 误差标准差
+        # Standard deviation of error
         print "absolute_translational_error.std %f m"%numpy.std(trans_error)
-        # 误差最小值
+        # Error minimum
         print "absolute_translational_error.min %f m"%numpy.min(trans_error)
-        # 误差最大值
+        # Error maximum
         print "absolute_translational_error.max %f m"%numpy.max(trans_error)
     else:
         print "%f"%numpy.sqrt(numpy.dot(trans_error,trans_error) / len(trans_error))
@@ -247,7 +246,7 @@ if __name__=="__main__":
         file.close()
 
     if args.plot:
-        # 绘制2D图=====
+        # Draw 2D diagrams
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
@@ -258,7 +257,7 @@ if __name__=="__main__":
         plot_traj(ax,first_stamps,first_xyz_full.transpose().A,'-',"black","ground truth")
         plot_traj(ax,second_stamps,second_xyz_full_aligned.transpose().A,'-',"blue","estimated")
         
-        # 误差线
+        # Error bars
         #label="difference"
         #for (a,b),(x1,y1,z1),(x2,y2,z2) in zip(matches,first_xyz.transpose().A,second_xyz_aligned.transpose().A):
         #    ax.plot([x1,x2],[y1,y2],'-',color="red",label=label)
@@ -271,7 +270,7 @@ if __name__=="__main__":
         plt.savefig(args.plot,dpi=90)
         
     if args.plot3D:
-        # 绘制3D图======
+        # Draw 3D diagrams
         import matplotlib as mpl
         mpl.use('Qt4Agg')
         from mpl_toolkits.mplot3d import Axes3D
@@ -283,7 +282,7 @@ if __name__=="__main__":
         plot_traj3D(ax,first_stamps,first_xyz_full.transpose().A,'-',"black","groundTruth")
         plot_traj3D(ax,second_stamps,second_xyz_full_aligned.transpose().A,'-',"blue","orb-slam2-flow")
         
-        # 误差线
+        # Error bars
         #label="difference"
         #for (a,b),(x1,y1,z1),(x2,y2,z2) in zip(matches,first_xyz.transpose().A,second_xyz_aligned.transpose().A):
         #    ax.plot([x1,x2],[y1,y2],[z1,z2],'-',color="red",label=label)
