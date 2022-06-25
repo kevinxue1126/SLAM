@@ -1,6 +1,6 @@
 /**
 * This file is part of ORB-SLAM2.
-* 2d-3d点对 求解位姿
+* 
 * This file is a modified version of EPnP <http://cvlab.epfl.ch/EPnP/index.php>, see FreeBSD license below.
 */
 
