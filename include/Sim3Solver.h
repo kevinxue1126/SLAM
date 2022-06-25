@@ -1,6 +1,6 @@
 /**
 * This file is part of ORB-SLAM2.
-* 相似变换求解器
+* Similarity Transform Solver
 */
 
 
