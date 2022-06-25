@@ -270,7 +270,7 @@ namespace ORB_SLAM2
 	  mvbOutlier = vector<bool>(N,false);
 
 	  // This is done only for the first Frame (or after a change in the calibration)
-	  if(mbInitialComputations)/
+	  if(mbInitialComputations)
 	  {
 	    // Calculated for uncorrected images
 	      ComputeImageBounds(imGray);
@@ -703,7 +703,7 @@ namespace ORB_SLAM2
 
 		  int bestDist = INT_MAX;
 		  int bestincR = 0;
-		  const int L = 5;/
+		  const int L = 5;
 		  vector<float> vDists;
 		  vDists.resize(2*L+1);
 		  const float iniu = scaleduR0+L-w;
