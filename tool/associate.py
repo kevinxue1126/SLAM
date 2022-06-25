@@ -1,9 +1,9 @@
 #!/usr/bin/python
 # -*- coding:utf-8 -*-
 
-# RGB和深图像时间戳对齐
-# 再和 groundtruth 相机轨迹对齐
-# 用法 python2 associate.py rgb.txt depth.txt > associate.txt
+# RGB and deep image timestamp alignment
+# Align with groundtruth camera track
+# Usage python2 associate.py rgb.txt depth.txt > associate.txt
 # python associate.py associate.txt groundtruth.txt > associate_with_groundtruth.txt
 
 # Software License Agreement (BSD License)
@@ -57,7 +57,7 @@ import sys
 import os
 import numpy
 
-# 读取轨迹文件=================
+# Read track file
 def read_file_list(filename):
     """
     Reads a trajectory from a text file. 
@@ -125,7 +125,7 @@ if __name__ == '__main__':
     parser.add_argument('--max_difference', help='maximally allowed time difference for matching entries (default: 0.02)',default=0.02)
     args = parser.parse_args()
     
-    # 读取文件
+    # Read file
     first_list = read_file_list(args.first_file)
     second_list = read_file_list(args.second_file)
 
