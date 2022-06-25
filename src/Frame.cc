@@ -1,44 +1,47 @@
 /**
 * This file is part of ORB-SLAM2.
-*  普通帧 每一幅 图像都会生成 一个帧
+*  Normal frame Each image will generate a frame
 * 
-************双目相机帧*************
-* 左右图
-* orb特征提取
-* 计算匹配点对
-* 由视差计算对应关键点的深度距离
+************Binocular camera frame*************
+* left and right
+* orb feature extraction
+* Calculate matching point pairs
+* Calculate the depth distance of the corresponding keypoint from the disparity
 * 
-* 双目 立体匹配
-* 1】为左目每个特征点建立带状区域搜索表，限定搜索区域，（前已进行极线校正）
-* 2】在限定区域内 通过描述子进行 特征点匹配，得到每个特征点最佳匹配点（scaleduR0）
-* 3】通过SAD滑窗得到匹配修正量 bestincR
-* 4】(bestincR, dist)  (bestincR - 1, dist)  (bestincR +1, dist) 三点拟合出抛物线，得到亚像素修正量 deltaR
-* 5】最终匹配点位置 为 : scaleduR0 + bestincR  + deltaR
+* binocular stereo matching
+* 1】Establish a band area search table for each feature point of the left eye, and limit the search area, (the polar line correction has been performed before)
+* 2】In the limited area, the feature points are matched by the descriptor, and the best matching point of each feature point is obtained (scaleduR0)
+* 3】The matching correction amount bestincR is obtained through the SAD sliding window
+* 4】(bestincR, dist)  (bestincR - 1, dist)  (bestincR +1, dist) Fitting a parabola with three points to get the sub-pixel correction deltaR
+* 5】The final matching point position is : scaleduR0 + bestincR  + deltaR
 * 
-* 视差 Disparity 和深度Depth
-* z = bf /d      b 双目相机基线长度  f为焦距  d为视差(同一点在两相机像素平面 水平方向像素单位差值)
+* Parallax Disparity and Depth
+* z = bf /d      
 * 
-* 为特征点分配网格
+* Assign meshes to feature points
 * 
-******深度相机 帧******************
-* 深度值 由未校正特征点 坐标对于应深度图 中的 值确定
-* 匹配点坐标横坐标值 为 特征点坐标 横坐标值 - 视差 = 特征点坐标 横坐标值  - bf / 深度
-* 为特征点分配网格
+******depth camera frame******************
+* The depth value is determined by the uncorrected feature point coordinates for the value in the corresponding depth map
+* The abscissa value of the matching point coordinate is the feature point coordinate
+* Assign meshes to feature points
 * 
-********单目相机帧****************
-* 深度值容器初始化
-* 匹配点坐标 容器初始化
-* 为特征点分配网格
+********Monocular camera frame****************
+* Depth value container initialization
+* Match point coordinates and container initialization
+* Assign meshes to feature points
 * 
 * 
-* *************图像金字塔********************************
-* 0层是原始图。对0层高斯核卷积后，降采样（删除所有偶数行和偶数列）
-* 即可得到高斯金字塔第1层；插入0用高斯卷积恢复成原始大小，与0层相减，得到0层拉普拉斯金字塔，
-* 对应的是0层高斯金字塔在滤波降采样过程中丢失的信息，在其上可以提取特征。
-* 然后不断降采样，获得不同层的高斯金字塔与拉普拉斯金字塔，
-* 提取出的特征对应的尺度与金字塔的层数是正相关的。层数越高，对应的尺度越大，尺度不确定性越高。
-* 通过对图像的这种处理，我们可以提取出尺寸不变的的特征。
-* 但是在特征匹配时，需要考虑到提取特征点时对应的层数（尺度）。
+* *************image pyramid********************************
+* Layer 0 is the original image. After convolving the 0-layer Gaussian kernel, 
+* downsampling (deleting all even-numbered rows and even-numbered columns) can obtain the first layer of the Gaussian pyramid; 
+* insert 0 and restore it to the original size with Gaussian convolution, 
+* subtract it from the 0-layer, and get the 0-layer pull The Plath pyramid corresponds to the information lost during the filtering and 
+* downsampling process of the 0-layer Gaussian pyramid, on which features can be extracted. 
+* Then continuously downsample to obtain Gaussian pyramids and Laplacian pyramids of different layers. 
+* The scale corresponding to the extracted features is positively correlated with the number of layers of the pyramids. 
+* The higher the number of layers, the larger the corresponding scale and the higher the scale uncertainty. 
+* Through this processing of images, we can extract features that are invariant in size. 
+* However, during feature matching, it is necessary to consider the corresponding number of layers (scales) when extracting feature points.
 * 
 * 
 */
@@ -61,9 +64,9 @@ namespace ORB_SLAM2
       {}
 
       /**
-      * @brief Copy constructor    默认初始化 主要是 直接赋值 写入到类内 变量
+      * @brief Copy constructor    The default initialization is mainly to directly assign and write to variables in the class
       *
-      * 复制构造函数, mLastFrame = Frame(mCurrentFrame)
+      * copy constructor, mLastFrame = Frame(mCurrentFrame)
       */
       Frame::Frame(const Frame &frame)
 	  :mpORBvocabulary(frame.mpORBvocabulary), mpORBextractorLeft(frame.mpORBextractorLeft), mpORBextractorRight(frame.mpORBextractorRight),
@@ -78,25 +81,25 @@ namespace ORB_SLAM2
 	  mvScaleFactors(frame.mvScaleFactors), mvInvScaleFactors(frame.mvInvScaleFactors),
 	  mvLevelSigma2(frame.mvLevelSigma2), mvInvLevelSigma2(frame.mvInvLevelSigma2)
       {
-	  for(int i=0;i<FRAME_GRID_COLS;i++)//64列
-	      for(int j=0; j<FRAME_GRID_ROWS; j++)//48行
-		  mGrid[i][j]=frame.mGrid[i][j];//存vector的数组 格子特征点数 赋值 
+	  for(int i=0;i<FRAME_GRID_COLS;i++)//64 columns
+	      for(int j=0; j<FRAME_GRID_ROWS; j++)//48 lines
+		  mGrid[i][j]=frame.mGrid[i][j];//array of vectors
 
 	  if(!frame.mTcw.empty())
 	      SetPose(frame.mTcw);
       }
       
       /**
-      * @brief  双目 立体匹配  初始化 构造帧
-      * @param imLeft       		 左图像
-      * @param imRight    		 右图像
-      * @param timeStamp		 时间戳
-      * @param extractorLeft          左图像 orb 特征提取器
-      * @param extractorRight        右图像 orb 特征提取器
-      * @param voc                           orb 字典
-      * @param K                               相机内参数
-      * @param distCoef                   畸变校正参数
-      * @param bf                             双目相机基线 × 焦距
+      * @brief  Initialize frame
+      * @param imLeft       		 left image
+      * @param imRight    		 right image
+      * @param timeStamp		 timestamp
+      * @param extractorLeft             left image orb feature extractor
+      * @param extractorRight            right image orb feature extractor
+      * @param voc                       orb dictionary
+      * @param K                         in-camera parameters
+      * @param distCoef                  distortion Correction Parameters
+      * @param bf                        binocular camera baseline × focal length
       * @param thDepth                  
       */
       Frame::Frame(const cv::Mat &imLeft, const cv::Mat &imRight, const double &timeStamp, ORBextractor* extractorLeft, ORBextractor* extractorRight, ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
@@ -107,9 +110,8 @@ namespace ORB_SLAM2
 	  mnId=nNextId++;
 
 	  // Scale Level Info
-	  // 特征点匹配 图像金字塔参数
-	  mnScaleLevels = mpORBextractorLeft->GetLevels();// 特征提取 图像金字塔 层数
-	  mfScaleFactor = mpORBextractorLeft->GetScaleFactor();//尺度
+	  mnScaleLevels = mpORBextractorLeft->GetLevels();// feature extraction
+	  mfScaleFactor = mpORBextractorLeft->GetScaleFactor();//scale
 	  mfLogScaleFactor = log(mfScaleFactor);
 	  mvScaleFactors = mpORBextractorLeft->GetScaleFactors();
 	  mvInvScaleFactors = mpORBextractorLeft->GetInverseScaleFactors();
@@ -117,37 +119,32 @@ namespace ORB_SLAM2
 	  mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
 
 	  // ORB extraction
-	  // 左右相机图像 ORB特征提取   未校正的图像  得到 关键点位置后 直接对 关键点坐标进行校正
-	  thread threadLeft(&Frame::ExtractORB,this,0,imLeft);// 左相机     提取 orb特征点 和描述子  线程 关键点 mvKeys   描述子mDescriptors
-	  thread threadRight(&Frame::ExtractORB,this,1,imRight);// 又相机 提取 orb特征点 和描述子                       mvKeysRight     mDescriptorsRight
-	  threadLeft.join();//加入到线程
+	  thread threadLeft(&Frame::ExtractORB,this,0,imLeft);// left camera 
+	  thread threadRight(&Frame::ExtractORB,this,1,imRight);// right camera
+	  threadLeft.join();//join the thread
 	  threadRight.join();
-      // 向量mvKeys中存放N个提取出的左图关键点，mDescriptor中存放提取出的左图描述子，
-	  // 右图的放在mvKeysRight和mDescriptorsRight中；
-	  N = mvKeys.size();//左图关键点数量 
+		  
+	  N = mvKeys.size();//The number of key points in the left image
 	  if(mvKeys.empty())
 	      return;
-	  // Undistort特征点，这里没有对双目进行校正，因为要求输入的图像已经进行极线校正
+	  // Undistort feature points, no binocular correction is performed here, because the input image is required to be polar corrected
 	  UndistortKeyPoints();
 	  
-      // 双目匹配 计算匹配点对  根据视差计算深度信息  d= mbf/d
-	   // 计算双目间的匹配, 匹配成功的特征点会计算其深度
-           // 深度存放在 mvDepth 中  右图 匹配点横坐标放在 mvuRight  
+      	// binocular matching
 	  ComputeStereoMatches();
 
-      // 初始化地图点及其外点；
+      // Initialize map points and their outer points;
 	  mvpMapPoints = vector<MapPoint*>(N,static_cast<MapPoint*>(NULL));    
-	  mvbOutlier = vector<bool>(N,false);// 对应的地图点是否是外点 地图点按照 [R t]投影到 本帧图上 是否在 图像范围内
+	  mvbOutlier = vector<bool>(N,false);// Whether the corresponding map point is an outer point
 
 
 	  // This is done only for the first Frame (or after a change in the calibration)
-	  if(mbInitialComputations)//第一帧 进行计算
+	  if(mbInitialComputations)
 	  {
-	    // 对于未校正的图像 计算校正后 图像的 尺寸 mnMinX  , mnMaxX   mnMinY,  mnMaxY
+	    // 对于未校正的图像for uncorrected images
 	    ComputeImageBounds(imLeft);
-	    // 640*480 图像 分成 64*48 个网格
-	    // 计算每个 像素 占据的 网格量   像素差×该量 得到 网格下标
-	      mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/(mnMaxX-mnMinX);// 每个像素占用的网格数
+	    // 640*480 image divided into 64*48 grids
+	      mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/(mnMaxX-mnMinX);// The number of grids occupied by each pixel
 	      mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/(mnMaxY-mnMinY);
 
 	      fx = K.at<float>(0,0);
@@ -160,29 +157,25 @@ namespace ORB_SLAM2
 	      mbInitialComputations=false;
 	  }
 
-	  mb = mbf/fx;// 双目相机基线长度
+	  mb = mbf/fx;// Binocular camera baseline length
 	
-	// 按照 特征点 的像素坐标  分配到各个网格内
-	// 每个网格记录了 特征点的 序列下标
-	// 最后将关键点分布到64*48分割而成的网格中（目的是加速匹配以及均匀化关键点分布）
+	// According to the pixel coordinates of the feature points are allocated to each grid
 	  AssignFeaturesToGrid();
       }
       
       /**
-      * @brief  深度相机 初始化  帧结构 灰度图 深度图
-      * @param mGray		 灰度图
-      * @param imDepth         深度图
+      * @brief  initialization
+      * @param mGray		 grayscale
+      * @param imDepth           depth map
       */
       Frame::Frame(const cv::Mat &imGray, const cv::Mat &imDepth, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
 	  :mpORBvocabulary(voc),mpORBextractorLeft(extractor),mpORBextractorRight(static_cast<ORBextractor*>(NULL)),
 	  mTimeStamp(timeStamp), mK(K.clone()),mDistCoef(distCoef.clone()), mbf(bf), mThDepth(thDepth)
       {
-	  // Frame ID
-	// int类型  帧id ++
+	  // Frame ID int type
 	  mnId=nNextId++;
 
 	  // Scale Level Info
-	  // 特征点匹配 图像金字塔参数
 	  mnScaleLevels = mpORBextractorLeft->GetLevels();
 	  mfScaleFactor = mpORBextractorLeft->GetScaleFactor();    
 	  mfLogScaleFactor = log(mfScaleFactor);
@@ -192,32 +185,29 @@ namespace ORB_SLAM2
 	  mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
 
 	  // ORB extraction
-	  // 图像 ORB特征提取   未校正的图像  得到 关键点位置后 直接对 关键点坐标进行校正
-	  ExtractORB(0,imGray);//  
-
-	  N = mvKeys.size();// 特征点数量
+	  ExtractORB(0,imGray);
+	
+          // number of feature points
+	  N = mvKeys.size();
 
 	  if(mvKeys.empty())
-	      return;//没有提取到特征点
-	  // 对关键点坐标进行校正    关键点   mvKeys -----> 畸变校正------>  mvKeysUn 
+	      return;
+	  // Correct keypoint coordinates 
 	  UndistortKeyPoints();
 	  
-      // 深度相机 计算  深度值 根据未校正的关键点 在深度图中的值 获得
-         // 匹配点横坐标 有原特征点校正的后横坐标 -  视差；    视差 = bf / 深度
-	 // 深度存放在 mvDepth 中  右图 匹配点横坐标放在 mvuRight  
+      	   // depth camera 
 	  ComputeStereoFromRGBD(imDepth);
 
-	  // 关键点 转成 的地图点
+	  // Map points converted from key points
 	  mvpMapPoints = vector<MapPoint*>(N,static_cast<MapPoint*>(NULL));
 	  mvbOutlier = vector<bool>(N,false);
 
 	  // This is done only for the first Frame (or after a change in the calibration)
-	  if(mbInitialComputations)//第一帧 进行计算
+	  if(mbInitialComputations)
 	  {
-	    // 对于未校正的图像 计算校正后 图像的 尺寸 mnMinX  , mnMaxX   mnMinY,  mnMaxY
+	    // Calculated for uncorrected images
 	      ComputeImageBounds(imGray);
-	    // 640*480 图像 分成 64*48 个网格
-	    // 计算每个 像素 占据的 网格量   像素差×该量 得到 网格下标
+	    // 640*480 image divided into 64*48 grids
 	      mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/static_cast<float>(mnMaxX-mnMinX);
 	      mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/static_cast<float>(mnMaxY-mnMinY);
 
@@ -230,18 +220,18 @@ namespace ORB_SLAM2
 
 	      mbInitialComputations=false;
 	  }
-
-	  mb = mbf/fx;// 双目相机基线长度
+		
+		  
+	// Binocular camera baseline length
+	  mb = mbf/fx;
 	
-	// 按照 特征点 的像素坐标  分配到各个网格内
-	// 每个网格记录了 特征点的 序列下标
-	// 最后将关键点分布到64*48分割而成的网格中（目的是加速匹配以及均匀化关键点分布）
+	// According to the pixel coordinates of the feature points are allocated to each grid
 	  AssignFeaturesToGrid();
       }
       
       /**
-      * @brief  单目相机 初始化帧  
-      * @param mGray		 灰度图
+      * @brief  initialization frame
+      * @param mGray		 grayscale
       * 
       */
       Frame::Frame(const cv::Mat &imGray, const double &timeStamp, ORBextractor* extractor,ORBVocabulary* voc, cv::Mat &K, cv::Mat &distCoef, const float &bf, const float &thDepth)
@@ -252,7 +242,6 @@ namespace ORB_SLAM2
 	  mnId=nNextId++;
 
 	  // Scale Level Info
-	  // 特征点匹配 图像金字塔参数
 	  mnScaleLevels = mpORBextractorLeft->GetLevels();
 	  mfScaleFactor = mpORBextractorLeft->GetScaleFactor();
 	  mfLogScaleFactor = log(mfScaleFactor);
@@ -262,34 +251,30 @@ namespace ORB_SLAM2
 	  mvInvLevelSigma2 = mpORBextractorLeft->GetInverseScaleSigmaSquares();
 
 	  // ORB extraction
-	  // 图像 ORB特征提取   未校正的图像  得到 关键点位置后 直接对 关键点坐标进行校正
 	  ExtractORB(0,imGray);
 
-	  N = mvKeys.size();// 特征点数量
+	  N = mvKeys.size();// number of feature points
 
 	  if(mvKeys.empty())
 	      return;
 
-	  // 对关键点坐标进行校正    关键点   mvKeys -----> 畸变校正------>  mvKeysUn 
+	  // Correct keypoint coordinates
 	  UndistortKeyPoints();
 
 	  // Set no stereo information
-	  // 初始化 匹配点 横坐标  和对应特征点的深度  单目一开始算不出来 深度 和 匹配点
-	  // 但是不包含匹配信息
-	  mvuRight = vector<float>(N,-1);//匹配点 横坐标 无 为-1
-	  mvDepth = vector<float>(N,-1);//匹配点深度 无 为-1
+	  mvuRight = vector<float>(N,-1);
+	  mvDepth = vector<float>(N,-1);
 	  
-	  // 地图点
+	  // map point
 	  mvpMapPoints = vector<MapPoint*>(N,static_cast<MapPoint*>(NULL));
 	  mvbOutlier = vector<bool>(N,false);
 
 	  // This is done only for the first Frame (or after a change in the calibration)
-	  if(mbInitialComputations)//第一帧 进行计算
+	  if(mbInitialComputations)/
 	  {
-	    // 对于未校正的图像 计算校正后 图像的 尺寸 mnMinX  , mnMaxX   mnMinY,  mnMaxY
+	    // Calculated for uncorrected images
 	      ComputeImageBounds(imGray);
-	    // 640*480 图像 分成 64*48 个网格
-	    // 计算每个 像素 占据的 网格量   像素差×该量 得到 网格下标
+	    // 640*480 image divided into 64*48 grids
 	      mfGridElementWidthInv=static_cast<float>(FRAME_GRID_COLS)/static_cast<float>(mnMaxX-mnMinX);
 	      mfGridElementHeightInv=static_cast<float>(FRAME_GRID_ROWS)/static_cast<float>(mnMaxY-mnMinY);
 
@@ -303,107 +288,102 @@ namespace ORB_SLAM2
 	      mbInitialComputations=false;
 	  }
 
-	  mb = mbf/fx;// 双目相机基线长度
+	  mb = mbf/fx;// Binocular camera baseline length
 	
-	// 按照 特征点 的像素坐标  分配到各个网格内
-	// 每个网格记录了 特征点的 序列下标
-	// 最后将关键点分布到64*48分割而成的网格中（目的是加速匹配以及均匀化关键点分布）
+	// According to the pixel coordinates of the feature points are allocated to each grid
 	  AssignFeaturesToGrid();
       }
   
   
 /**
- * @brief        关键点按网格分配 来加速 匹配
- * 640 *480 的图像  分成 10 64*48 个网格  总关键点 个数 N  每个网格 分到的 关键点个数
+ * @brief        Keypoints are assigned by mesh to speed up matching
+ * 
  */    
       void Frame::AssignFeaturesToGrid()
       {
 	  int nReserve = 0.5f*N/(FRAME_GRID_COLS*FRAME_GRID_ROWS);
 	  for(unsigned int i=0; i<FRAME_GRID_COLS;i++)
 	      for (unsigned int j=0; j<FRAME_GRID_ROWS;j++)
-		  mGrid[i][j].reserve(nReserve);//每个小网格容器 又变成 分关键点个数个大小的 子容器 可以动态调整大小
+		  mGrid[i][j].reserve(nReserve);
 
 	  for(int i=0;i<N;i++)
 	  {
-	      const cv::KeyPoint &kp = mvKeysUn[i];//每一个 校正后的关键点
+	      const cv::KeyPoint &kp = mvKeysUn[i];
 
 	      int nGridPosX, nGridPosY;
 	      if(PosInGrid(kp,nGridPosX,nGridPosY))
-		  mGrid[nGridPosX][nGridPosY].push_back(i);//网格容器内 填充关键点的 序列  动态调整大小
+		  mGrid[nGridPosX][nGridPosY].push_back(i);
 	  }
       }
 
-      // 关键点提取 + 描述子
+      // Keypoint Extraction + Descriptor
       void Frame::ExtractORB(int flag, const cv::Mat &im)
       {
 	  if(flag==0)
-	      (*mpORBextractorLeft)(im,cv::Mat(),mvKeys,mDescriptors);//左图提取器 提取 关键点 和描述子
+	      (*mpORBextractorLeft)(im,cv::Mat(),mvKeys,mDescriptors);//Left image extractor
 	  else
-	      (*mpORBextractorRight)(im,cv::Mat(),mvKeysRight,mDescriptorsRight);// 右图提取器  提取 关键点 和描述子
+	      (*mpORBextractorRight)(im,cv::Mat(),mvKeysRight,mDescriptorsRight);// Right image extractor
       }
 
 /**
  * @brief Set the camera pose.
  * 
- * 设置相机姿态，随后会调用 UpdatePoseMatrices() 来改变mRcw,mRwc等变量的值
+ * 
  * @param Tcw Transformation from world to camera
  */
       void Frame::SetPose(cv::Mat Tcw)
       {
-	  mTcw = Tcw.clone();// 设置位姿 变换矩阵  到 类内 变量
-	  // Tcw_.copyTo(mTcw);// 拷贝到 类内变量 w2c
-	  UpdatePoseMatrices();// 更新旋转矩阵 平移向量 世界中心点
+	  mTcw = Tcw.clone();// set pose
+	  // Tcw_.copyTo(mTcw);// Copy to class variable w2c
+	  UpdatePoseMatrices();// update rotation matrix
       }
  
 /**
  * @brief Computes rotation, translation and camera center matrices from the camera pose.
  *
- * 根据Tcw计算mRcw、mtcw和mRwc、mOw
+ * Calculate mRcw, mtcw and mRwc, mOw from Tcw
  */     
       void Frame::UpdatePoseMatrices()
       { 
-	 // [x_camera 1] = [R|t]*[x_world 1]，坐标为齐次形式
+	 // [x_camera 1] = [R|t]*[x_world 1]，Coordinates are in homogeneous form
          // x_camera = R*x_world + t
-	  mRcw = mTcw.rowRange(0,3).colRange(0,3);// 世界 到 相机 旋转矩阵
-	  mRwc = mRcw.t();// t() 逆矩阵                        // 相机 到 世界  旋转矩阵
-	  mtcw = mTcw.rowRange(0,3).col(3);              // 世界 到 相机 平移向量
-	  // mtcw, 即相机坐标系下相机坐标系到世界坐标系间的向量, 向量方向由相机坐标系指向世界坐标系
-	  // mOw, 即世界坐标系下世界坐标系到相机坐标系间的向量, 向量方向由世界坐标系指向相机坐标系    
-	  // mtwc  = - mtcw
-	  mOw = -mRwc*mtcw;// 相机中心点在世界坐标系坐标  相机00点--->mRwc------>mtwc--------
+	  mRcw = mTcw.rowRange(0,3).colRange(0,3);
+	  mRwc = mRcw.t();                      
+	  mtcw = mTcw.rowRange(0,3).col(3);            
+	  mOw = -mRwc*mtcw;
       }
       
 /**
- * @brief 判断一个点是否在视野内
- * 检查地图点 是否在 当前视野中
- * 相机坐标系下 点 深度小于0 点不在视野中
- * 像素坐标系下 点 横纵坐标在 校正后的图像尺寸内
- * 计算了重投影坐标，观测方向夹角，预测在当前帧的尺度
+ * @brief Determine whether a point is in the field of view, 
+ * check whether the map point is in the current field of view, 
+ * the point depth under the camera coordinate system is less than 0, 
+ * and the point is not in the field of view, 
+ * and the horizontal and vertical coordinates of the point under the pixel coordinate system are within the corrected image size, 
+ * and reprojection is calculated. Coordinates, the angle between the observation direction, the scale of the prediction in the current frame
+ * 
  * @param  pMP             MapPoint
- * @param  viewingCosLimit 视角和平均视角的方向阈值
+ * @param  viewingCosLimit Orientation thresholds for viewing angle and average viewing angle
  * @return                 true if is in view
  * @see SearchLocalPoints()
  */
       bool Frame::isInFrustum(MapPoint *pMP, float viewingCosLimit)
       {
-	  pMP->mbTrackInView = false;// 初始 设置为 不在视野内
+	  pMP->mbTrackInView = false;// initialization
 
 	  // 3D in absolute coordinates
-	  cv::Mat P = pMP->GetWorldPos();// 世界坐标系下的点
+	  cv::Mat P = pMP->GetWorldPos();
 
 	  // 3D in camera coordinates
-	  // 3D点转换到 相机坐标系下
-	  const cv::Mat Pc = mRcw*P+mtcw;  // 世界坐标系 转到 相机坐标系
+	  const cv::Mat Pc = mRcw*P+mtcw;  
 	  const float &PcX = Pc.at<float>(0);
 	  const float &PcY= Pc.at<float>(1);
 	  const float &PcZ = Pc.at<float>(2);
 
 	  // Check positive depth
-	  if(PcZ<0.0f)// 深度为 负  错误
+	  if(PcZ<0.0f)
 	      return false;
 
 	  // Project in image and check it is not outside
-	  // 相机像素坐标系下的点   应该在 校正的图像内
 	  const float invz = 1.0f/PcZ;
 	  const float u=fx*PcX*invz+cx;
 	  const float v=fy*PcY*invz+cy;
@@ -413,37 +393,28 @@ namespace ORB_SLAM2
 	      return false;
 
 	  // Check distance is in the scale invariance region of the MapPoint
-	  // 每一个地图点都是对应于若干尺度的金字塔提取出来的，具有一定的有效深度，
-	// 如果相对当前帧的深度超过此范围，返回False
-	// V-D 3) 计算MapPoint到相机中心的距离, 并判断是否在尺度变化的距离内
 	  const float maxDistance = pMP->GetMaxDistanceInvariance();
 	  const float minDistance = pMP->GetMinDistanceInvariance();
-	  // 世界坐标系下，相机到3D点P的向量, 向量方向由相机指向3D点P
-	  const cv::Mat PO = P-mOw;// 世界坐标系下，相机到3D点P的向量, 向量方向由相机指向3D点P
+	  // In the world coordinate system, the vector from the camera to the 3D point P, the vector direction is from the camera to the 3D point P
+	  const cv::Mat PO = P-mOw;
 	  const float dist = cv::norm(PO);
 	  if(dist<minDistance || dist>maxDistance)
 	      return false;
 
 	// Check viewing angle
-	  // 每一个地图点都有其平均视角，是从能够观测到地图点的帧位姿中计算出
-	  // 如果当前帧的视角和其平均视角相差太大，返回False
-	   // V-D 2) 计算当前视角和平均视角夹角的余弦值, 若小于cos(60), 即夹角大于60度则返回
 	  cv::Mat Pn = pMP->GetNormal();// |Pn|=1
 	  const float viewCos = PO.dot(Pn)/dist;//  = P0.dot(Pn)/(|P0|*|Pn|); |P0|=dist 
 	  if(viewCos < viewingCosLimit)
 	      return false;
 
 	  // Predict scale in the image
-	  // 根据深度预测尺度（对应特征点在一层）
-	  // V-D 4) 根据深度预测尺度（对应特征点在一层）
 	  const int nPredictedLevel = pMP->PredictScale(dist,this);
 
 	  // Data used by the tracking
-	  //  标记该点将来要被投影
-	  pMP->mbTrackInView = true;//在视野中
-	  pMP->mTrackProjX = u;// 投影点 像素横坐标
-	  pMP->mTrackProjXR = u - mbf*invz;// 双目右侧相机 匹配点 像素 横坐标 = 投影点 像素横坐标 - 视差 = 投影点 像素横坐标 - bf / 深度
-	  pMP->mTrackProjY = v;// 投影点 像素 纵坐标
+	  pMP->mbTrackInView = true;
+	  pMP->mTrackProjX = u;
+	  pMP->mTrackProjXR = u - mbf*invz;
+	  pMP->mTrackProjY = v;
 	  pMP->mnTrackScaleLevel= nPredictedLevel;
 	  pMP->mTrackViewCos = viewCos;
 
@@ -451,15 +422,16 @@ namespace ORB_SLAM2
       }
       
 /**
- * @brief 找到在 以x,y为中心,边长为2r的方形内且在[minLevel, maxLevel]的特征点
- * 在某块区域内获取特帧点
- * 其中，minLevel和maxLevel考察特征点是从图像金字塔的哪一层提取出来的。
- * @param x        图像坐标u
- * @param y        图像坐标v
- * @param r        边长
- * @param minLevel 最小尺度
- * @param maxLevel 最大尺度
- * @return         满足条件的特征点的序号
+ * @brief Find the feature points in the square with x, y as the center and the side length is 2r and in [minLevel, maxLevel], 
+ * and obtain the feature frame points in a certain area, 
+ * among which, minLevel and maxLevel inspect the feature points from the image pyramid which layer was extracted.
+ * 
+ * @param x        image coordinates x
+ * @param y        image coordinates y
+ * @param r        side length
+ * @param minLevel minimum scale
+ * @param maxLevel maximum scale
+ * @return         The sequence number of the feature point that satisfies the condition
  */
 
       vector<size_t> Frame::GetFeaturesInArea(const float &x, const float  &y, const float  &r, const int minLevel, const int maxLevel) const
@@ -518,53 +490,46 @@ namespace ORB_SLAM2
       }
 
 
-      // 检查点是否在 某个划分的格子内 
+      // Check if a point is in a partitioned grid
       bool Frame::PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY)
       {
-	// 被 划分到的 格子坐标
 	  posX = round((kp.pt.x-mnMinX)*mfGridElementWidthInv);
 	  posY = round((kp.pt.y-mnMinY)*mfGridElementHeightInv);
 	  //Keypoint's coordinates are undistorted, which could cause to go out of the image
 	  if(posX<0 || posX>=FRAME_GRID_COLS || posY<0 || posY>=FRAME_GRID_ROWS)
-	      return false;// 不在 某个格子里
-	  return true;//在某个格子里
+	      return false;
+	  return true;
       }
       
 
 /**
  * @brief Bag of Words Representation
  *
- * 用单词(ORB单词词典) 线性表示 一帧所有描述子  相当于  一个句子 用几个单词 来表示
- * 词典 N个M维的单词
- * 一帧的描述子  n个M维的描述子
- * 生成一个 N*1的向量 记录一帧的描述子 使用词典单词的情况
- * 4. 将当前帧的描述子矩阵（可以转换成向量），转换成词袋模型向量
- * （DBoW2::BowVector mBowVec； DBoW2::FeatureVector mFeatVec；）：
- * 计算词包mBowVec和mFeatVec，其中mFeatVec记录了属于第i个node（在第4层）的ni个描述子
+ * Using words (ORB word dictionary) to linearly represent all descriptors in a frame is equivalent to a sentence represented by several words, 
+ * a dictionary of N M-dimensional words
+ * 
  * @see CreateInitialMapMonocular() TrackReferenceKeyFrame() Relocalization()
  */
       void Frame::ComputeBoW()
       {
-	  if(mBowVec.empty())//词典表示向量为空
+	  if(mBowVec.empty())//Dictionary representation vector is empty
 	  {
-	      vector<cv::Mat> vCurrentDesc = Converter::toDescriptorVector(mDescriptors);//mat类型转换到 vector类型描述子向量
+	      vector<cv::Mat> vCurrentDesc = Converter::toDescriptorVector(mDescriptors);
 	      // Feature vector associate features with nodes in the 4th level (from leaves up)
 	      // We assume the vocabulary tree has 6 levels, change the 4 otherwise
-	      mpORBvocabulary->transform(vCurrentDesc,mBowVec,mFeatVec,4);// 计算 描述子向量 用词典线性表示的向量
+	      mpORBvocabulary->transform(vCurrentDesc,mBowVec,mFeatVec,4);
 	  }
       }
 
-      // 对元素图像中的点 利用 畸变 参数进行校正 得到校正后的坐标 
-      // 不是对 整个图像进行校正(时间长)
+      // Correct the points in the element image using the distortion parameters to obtain the corrected coordinates
       void Frame::UndistortKeyPoints()
       {
-	  if(mDistCoef.at<float>(0)==0.0)// 畸变校正参数没有 
+	  if(mDistCoef.at<float>(0)==0.0)// distortion Correction Parameters No
 	  {
-	      mvKeysUn=mvKeys;//校正后的点 和 未校正 的点坐标 二位像素坐标
+	      mvKeysUn=mvKeys;//Corrected and uncorrected point coordinates
 	      return;
 	  }
 	  // Fill matrix with points
-	  // 关键点坐标（未校正） 转成 opencv mat类型
 	  cv::Mat mat(N,2,CV_32F);
 	  for(int i=0; i<N; i++)
 	  {
@@ -572,13 +537,12 @@ namespace ORB_SLAM2
 	      mat.at<float>(i,1)=mvKeys[i].pt.y;
 	  }
 
-	  // 校正关键点坐标 Undistort points
-	// 函数的功能：将一些 来自 原始图像的2维点坐标进行校正 得到  相应的矫正点坐标。
+	  // Correct key point coordinates Undistort points
 	  mat=mat.reshape(2);
 	  cv::undistortPoints(mat,mat,mK,mDistCoef,cv::Mat(),mK);
 	  mat=mat.reshape(1);
 
-	  // Fill undistorted keypoint vector 填充校正后的坐标
+	  // Fill undistorted keypoint vector
 	  mvKeysUn.resize(N);
 	  for(int i=0; i<N; i++)
 	  {
@@ -589,21 +553,19 @@ namespace ORB_SLAM2
 	  }
       }
 
-      // 对于未校正的图像 计算校正后 图像的 尺寸
+      // For uncorrected images Calculate the size of the corrected image
       void Frame::ComputeImageBounds(const cv::Mat &imLeft)
       {
-	  if(mDistCoef.at<float>(0)!=0.0)// 畸变校正参数 有
+	  if(mDistCoef.at<float>(0)!=0.0)
 	  {
 	      cv::Mat mat(4,2,CV_32F);
-	      // 图像四个顶点位置
-	      // (0,0)  (col,0)  (0,row)   (col,row)
+	      // The four vertex positions of the image
 	      mat.at<float>(0,0)=0.0; mat.at<float>(0,1)=0.0;
 	      mat.at<float>(1,0)=imLeft.cols; mat.at<float>(1,1)=0.0;
 	      mat.at<float>(2,0)=0.0; mat.at<float>(2,1)=imLeft.rows;
 	      mat.at<float>(3,0)=imLeft.cols; mat.at<float>(3,1)=imLeft.rows;
 
 	      // Undistort corners
-	      // 对图像四个点进行 畸变校正
 	      mat=mat.reshape(2);
 	      cv::undistortPoints(mat,mat,mK,mDistCoef,cv::Mat(),mK);
 	      mat=mat.reshape(1);
@@ -614,7 +576,7 @@ namespace ORB_SLAM2
 	      mnMaxY = max(mat.at<float>(2,1),mat.at<float>(3,1));
 
 	  }
-	  else // 无畸变校正参数  也就是校正后的图像 图像大小不变
+	  else // No Distortion Correction Parameters
 	  {
 	      mnMinX = 0.0f;
 	      mnMaxX = imLeft.cols;
@@ -624,52 +586,41 @@ namespace ORB_SLAM2
       }
       
 /**
- * @brief 双目匹配   双目匹配  特征点对匹配
+ * @brief binocular matching
  *
- * 为左图的每一个特征点在右图中找到匹配点 \n
- * 根据基线(有冗余范围)上描述子距离找到匹配, 再进行SAD精确定位 \n
- * 最后对所有SAD的值进行排序, 剔除SAD值较大的匹配对，然后利用抛物线拟合得到亚像素精度的匹配 \n
- * 匹配成功后会更新 mvuRight(ur) 和 mvDepth(Z)
+ * Find matching points in the right image for each feature point in the left image
+ * Find a match according to the descriptor distance on the baseline (with redundant range), and then perform SAD precise positioning
+ * Finally, sort all SAD values, eliminate matching pairs with larger SAD values, and then use parabolic fitting to obtain sub-pixel precision matching
+ * After the match is successful, mvuRight(ur) and mvDepth(Z) will be updated
  */
       /*
-      * 1】为左目每个特征点建立带状区域搜索表，限定搜索区域，（前已进行极线校正）
-      * 2】在限定区域内 通过描述子进行 特征点匹配，得到每个特征点最佳匹配点（scaleduR0）   bestIdxR  uR0 = mvKeysRight[bestIdxR].pt.x;   scaleduR0 = round(uR0*scaleFactor);
-      * 3】通过SAD滑窗得到匹配修正量 bestincR
-      * 4】(bestincR, dist)  (bestincR - 1, dist)  (bestincR +1, dist) 三点拟合出抛物线，得到亚像素修正量 deltaR
-      剔除SAD匹配偏差较大的匹配特征点。
-      * 5】最终匹配点位置 为 : scaleduR0 + bestincR  + deltaR
+      * 1】Establish a band area search table for each feature point of the left eye, and limit the search area, (the polar line correction has been performed before)
+      * 2】Match feature points through descriptors in a limited area to obtain the best matching point for each feature point（scaleduR0）   bestIdxR  uR0 = mvKeysRight[bestIdxR].pt.x;   scaleduR0 = round(uR0*scaleFactor);
+      * 3】The matching correction amount is obtained through the SAD sliding window bestincR
+      * 4】(bestincR, dist)  (bestincR - 1, dist)  (bestincR +1, dist) Three points are fitted to a parabola, and the sub-pixel correction amount deltaR is obtained to eliminate the matching feature points with large SAD matching deviation.
+      * 5】The final matching point position is : scaleduR0 + bestincR  + deltaR
       */
       void Frame::ComputeStereoMatches()
       {
-	  mvuRight = vector<float>(N,-1.0f);// 左图关键点 对应 右图匹配点
-	  mvDepth = vector<float>(N,-1.0f);// 关键点对于的深度
+	  mvuRight = vector<float>(N,-1.0f);
+	  mvDepth = vector<float>(N,-1.0f);
 
-	  const int thOrbDist = (ORBmatcher::TH_HIGH+ORBmatcher::TH_LOW)/2;// 匹配距离
+	  const int thOrbDist = (ORBmatcher::TH_HIGH+ORBmatcher::TH_LOW)/2;
 
 	  const int nRows = mpORBextractorLeft->mvImagePyramid[0].rows;
 
     //Assign keypoints to row table
-// 步骤1：建立特征点搜索范围对应表，一个特征点在一个带状区域内搜索匹配特征点
-    // 匹配搜索的时候，不仅仅是在一条横线上搜索，而是在一条横向搜索带上搜索,简而言之，原本每个特征点的纵坐标为1，这里把特征点体积放大，纵坐标占好几行
-    // 例如左目图像某个特征点的纵坐标为20，那么在右侧图像上搜索时是在纵坐标为18到22这条带上搜索，搜索带宽度为正负2，搜索带的宽度和特征点所在金字塔层数有关
-    // 简单来说，如果纵坐标是20，特征点在图像第20行，那么认为18 19 20 21 22行都有这个特征点
-    // vRowIndices[18]、vRowIndices[19]、vRowIndices[20]、vRowIndices[21]、vRowIndices[22]都有这个特征点编号
 	  vector<vector<size_t> > vRowIndices(nRows,vector<size_t>());
 
 	  for(int i=0; i<nRows; i++)
 	      vRowIndices[i].reserve(200);
 
-	  const int Nr = mvKeysRight.size();// 右图关键点数量
+	  const int Nr = mvKeysRight.size();
 
-	  // 生成 右图 关键点 匹配块 限制 搜索 带状 区域
 	  for(int iR=0; iR<Nr; iR++)
 	  {
-	    // !!在这个函数中没有对双目进行校正，双目校正是在外层程序中实现的
 	      const cv::KeyPoint &kp = mvKeysRight[iR];
-	      const float &kpY = kp.pt.y;
-        // 计算匹配搜索的纵向宽度，尺度越大（层数越高，距离越近），搜索范围越大
-        // 如果特征点在金字塔第一层，则搜索范围为:正负2
-        // 尺度越大其位置不确定性越高，所以其搜索半径越大	      
+	      const float &kpY = kp.pt.y;	      
 	      const float r = 2.0f*mvScaleFactors[mvKeysRight[iR].octave];
 	      const int maxr = ceil(kpY+r);
 	      const int minr = floor(kpY-r);
@@ -679,29 +630,23 @@ namespace ORB_SLAM2
 	  }
 
 	  // Set limits for search
-	  const float minZ = mb;        // NOTE bug mb没有初始化，mb的赋值在构造函数中放在ComputeStereoMatches函数的后面
-	  const float minD = 0;        // 最小视差, 设置为0即可
-	  const float maxD = mbf/minZ;  // 最大视差, 对应最小深度 mbf/minZ = mbf/mb = mbf/(mbf/fx) = fx (wubo???)
+	  const float minZ = mb;       
+	  const float minD = 0;       
+	  const float maxD = mbf/minZ;  
 
 
 	  // For each left keypoint search a match in the right image
-	  // 在右图限定区域内为 左图 关键点 匹配一个 关键点
 	  vector<pair<int, int> > vDistIdx;
 	  vDistIdx.reserve(N);
 	  
-// 步骤2：对左目相机每个特征点，通过描述子在右目带状搜索区域找到匹配点, 再通过SAD做亚像素匹配
-    // 注意：这里是校正前的mvKeys，而不是校正后的mvKeysUn
-    // KeyFrame::UnprojectStereo和Frame::UnprojectStereo函数中不一致
-    // 这里是不是应该对校正后特征点求深度呢？(wubo???)
-	  for(int iL=0; iL<N; iL++)// 每一个 左图关键点 和 限定区域 右图关键点 进行描述子匹配 找到 距离最近的 匹配点  + 修正量
+	  for(int iL=0; iL<N; iL++)
 	  {
-	    // 创建引用
 	      const cv::KeyPoint &kpL = mvKeys[iL];
 	      const int &levelL = kpL.octave;
 	      const float &vL = kpL.pt.y;
 	      const float &uL = kpL.pt.x;
 
-	      const vector<size_t> &vCandidates = vRowIndices[vL];// 关键点匹配 候选区域
+	      const vector<size_t> &vCandidates = vRowIndices[vL];
 
 	      if(vCandidates.empty())
 		  continue;
@@ -715,13 +660,12 @@ namespace ORB_SLAM2
 	      int bestDist = ORBmatcher::TH_HIGH;
 	      size_t bestIdxR = 0;
 
-	      const cv::Mat &dL = mDescriptors.row(iL);//左图关键点 描述子
-  // 步骤2.1：遍历右目所有可能的匹配点，找出最佳匹配点（描述子距离最小）
-	      // Compare descriptor to right keypoints  和右图 关键点 描述子进行比较
-	      for(size_t iC=0; iC<vCandidates.size(); iC++)// 每一个 右图 候选区域 关键点
+	      const cv::Mat &dL = mDescriptors.row(iL);）
+	      // Compare descriptor to right keypoints  
+	      for(size_t iC=0; iC<vCandidates.size(); iC++)
 	      {
 		  const size_t iR = vCandidates[iC];
-		  const cv::KeyPoint &kpR = mvKeysRight[iR];//右图关键点
+		  const cv::KeyPoint &kpR = mvKeysRight[iR];
 
 		  if(kpR.octave<levelL-1 || kpR.octave>levelL+1)
 		      continue;
@@ -730,25 +674,21 @@ namespace ORB_SLAM2
 
 		  if(uR>=minU && uR<=maxU)
 		  {
-		      const cv::Mat &dR = mDescriptorsRight.row(iR);// 右图  关键点描述子
-		      const int dist = ORBmatcher::DescriptorDistance(dL,dR);// 二进制描述子 相似度距离   汉明距离
+		      const cv::Mat &dR = mDescriptorsRight.row(iR);
+		      const int dist = ORBmatcher::DescriptorDistance(dL,dR);
 
 		      if(dist<bestDist)
 		      {
-			  bestDist = dist;//保存最小的 匹配距离
-			  bestIdxR = iR;// 最小匹配距离对应的 右图点 bestIdxR
+			  bestDist = dist;
+			  bestIdxR = iR;
 		      }
 		  }
 	      }
 	      
-   // 步骤2.2：通过SAD匹配提高像素匹配修正量bestincR
 	      // Subpixel match by correlation
-	      // 亚像素修正量
-	      if(bestDist<thOrbDist)// 匹配距离较小
+	      if(bestDist<thOrbDist)
 	      {
 		  // coordinates in image pyramid at keypoint scale
-		// 图像金字塔中的 匹配点坐标 
-		// kpL.pt.x对应金字塔最底层坐标，将最佳匹配的特征点对尺度变换到尺度对应层 (scaleduL, scaledvL) (scaleduR0, )
 		  const float uR0 = mvKeysRight[bestIdxR].pt.x;
 		  const float scaleFactor = mvInvScaleFactors[kpL.octave];
 		  const float scaleduL = round(kpL.pt.x*scaleFactor);
@@ -756,7 +696,6 @@ namespace ORB_SLAM2
 		  const float scaleduR0 = round(uR0*scaleFactor);
 
 		  // sliding window search
-		  // 滑窗方法
 		  const int w = 5;
 		  cv::Mat IL = mpORBextractorLeft->mvImagePyramid[kpL.octave].rowRange(scaledvL-w,scaledvL+w+1).colRange(scaleduL-w,scaleduL+w+1);
 		  IL.convertTo(IL,CV_32F);
@@ -764,10 +703,9 @@ namespace ORB_SLAM2
 
 		  int bestDist = INT_MAX;
 		  int bestincR = 0;
-		  const int L = 5;// 10*10窗口
+		  const int L = 5;/
 		  vector<float> vDists;
 		  vDists.resize(2*L+1);
-                 // 滑动窗口的滑动范围为（-L, L）,提前判断滑动窗口滑动过程中是否会越界
 		  const float iniu = scaleduR0+L-w;
 		  const float endu = scaleduR0+L+w+1;
 		  if(iniu<0 || endu >= mpORBextractorRight->mvImagePyramid[kpL.octave].cols)
@@ -777,41 +715,33 @@ namespace ORB_SLAM2
 		  {
 		      cv::Mat IR = mpORBextractorRight->mvImagePyramid[kpL.octave].rowRange(scaledvL-w,scaledvL+w+1).colRange(scaleduR0+incR-w,scaleduR0+incR+w+1);
 		      IR.convertTo(IR,CV_32F);
-		      IR = IR - IR.at<float>(w,w) *cv::Mat::ones(IR.rows,IR.cols,CV_32F);//窗口中的每个元素减去正中心的那个元素，简单归一化，减小光照强度影响
+		      IR = IR - IR.at<float>(w,w) *cv::Mat::ones(IR.rows,IR.cols,CV_32F);
 
-		      float dist = cv::norm(IL,IR,cv::NORM_L1);// 一范数，计算差的绝对值
+		      float dist = cv::norm(IL,IR,cv::NORM_L1);
 		      if(dist<bestDist)
 		      {
-                         bestDist =  dist;// SAD匹配目前最小匹配偏差
-                         bestincR = incR; // SAD匹配目前最佳的修正量
+                         bestDist =  dist;
+                         bestincR = incR; 
 		      }
 
-		      vDists[L+incR] = dist;// 距离
+		      vDists[L+incR] = dist;
 		  }
 
 		  if(bestincR==-L || bestincR==L)
 		      continue;
-       // 步骤2.3：做抛物线拟合找谷底得到亚像素匹配deltaR
-            // (bestincR,dist) (bestincR-1,dist) (bestincR+1,dist)三个点拟合出抛物线
-            // bestincR+deltaR就是抛物线谷底的位置，相对SAD匹配出的最小值bestincR的修正量为deltaR
 		  // Sub-pixel match (Parabola fitting)
 		  const float dist1 = vDists[L+bestincR-1];
 		  const float dist2 = vDists[L+bestincR];
 		  const float dist3 = vDists[L+bestincR+1];
 
 		  const float deltaR = (dist1-dist3)/(2.0f*(dist1+dist3-2.0f*dist2));
-                   // 抛物线拟合得到的修正量不能超过一个像素，否则放弃求该特征点的深度
 		  if(deltaR<-1 || deltaR>1)
 		      continue;
 
 		  // Re-scaled coordinate
-		  // 最终 右图 匹配点 横坐标   带状块区域 描述子匹配 坐标 + 滑窗校正  + 抛物线拟合校正
 		  float bestuR = mvScaleFactors[kpL.octave]*((float)scaleduR0+(float)bestincR+deltaR);
 
-		  // 通过描述子匹配得到匹配点位置为scaleduR0
-		  // 通过SAD匹配找到修正量bestincR
-		  // 通过抛物线拟合找到亚像素修正量deltaR  
-		  float disparity = (uL-bestuR);// 双目相机 匹配点对 视差
+		  float disparity = (uL-bestuR);
 
 		  if(disparity>=minD && disparity<maxD)
 		  {
@@ -820,24 +750,22 @@ namespace ORB_SLAM2
 			  disparity=0.01;
 			  bestuR = uL-0.01;
 		      }
-		      mvDepth[iL]=mbf/disparity; //根据视差得到深度信息    z = bf /d      b 双目相机基线长度  f为焦距  d为视差(同一点在两相机像素平面 水平方向像素单位差值)
+		      mvDepth[iL]=mbf/disparity; 
 		      mvuRight[iL] = bestuR;
 		      vDistIdx.push_back(pair<int,int>(bestDist,iL));
 		  }
 	      }
 	  }
-      // 以上 计算了 所有 关键点的匹配点对(以及最佳匹配距离) 和 对应的深度
-// 步骤3：剔除SAD匹配偏差较大的匹配特征点
-    // 前面SAD匹配只判断滑动窗口中是否有局部最小值，这里通过对比剔除SAD匹配偏差比较大的特征点的深度
-	  sort(vDistIdx.begin(),vDistIdx.end());// 所有关键点 匹配距离排序  根据所有匹配对的SAD偏差进行排序, 距离由小到大
-	  const float median = vDistIdx[vDistIdx.size()/2].first;// 距离中值
-	  const float thDist = 1.5f*1.4f*median; // 计算自适应距离, 大于此距离的匹配对将剔除
+     
+	  sort(vDistIdx.begin(),vDistIdx.end());
+	  const float median = vDistIdx[vDistIdx.size()/2].first;
+	  const float thDist = 1.5f*1.4f*median; 
 
 	  for(int i=vDistIdx.size()-1;i>=0;i--)
 	  {
 	      if(vDistIdx[i].first<thDist)
 		  break;
-	      else // 距离过大的匹配点对 任务是误匹配  设置为 -1 用以标记
+	      else 
 	      {
 		  mvuRight[vDistIdx[i].second]=-1;
 		  mvDepth[vDistIdx[i].second]=-1;
@@ -845,50 +773,44 @@ namespace ORB_SLAM2
 	  }
       }
 
-      // 深度相机 计算  深度值 根据未校正的关键点 在深度图中的值 获得
-      // 匹配点横坐标 有原特征点校正的后横坐标 -  视差；    视差 = bf / 深度
       void Frame::ComputeStereoFromRGBD(const cv::Mat &imDepth)
       {
-	  mvuRight = vector<float>(N,-1);// 初始匹配点
-	  mvDepth = vector<float>(N,-1);// 初始深度
+	  mvuRight = vector<float>(N,-1);
+	  mvDepth = vector<float>(N,-1);
 
 	  for(int i=0; i<N; i++)
 	  {
-	      const cv::KeyPoint &kp = mvKeys[i];// 关键点 未校正  用于从深度图 获取深度值
-	      const cv::KeyPoint &kpU = mvKeysUn[i];//校正后的 关键点
+	      const cv::KeyPoint &kp = mvKeys[i];
+	      const cv::KeyPoint &kpU = mvKeysUn[i];
 
 	      const float &v = kp.pt.y;
 	      const float &u = kp.pt.x;
 
-	      const float d = imDepth.at<float>(v,u);// 对应的深度值 
+	      const float d = imDepth.at<float>(v,u);
 
 	      if(d>0)
 	      {
 		  mvDepth[i] = d;
-		  mvuRight[i] = kpU.pt.x-mbf/d;// 深度 = bf / 视差  ---> 视差 = bf / 深度  ----> 原校正后的坐标 - 视差 得到匹配点 x方向坐标值
+		  mvuRight[i] = kpU.pt.x-mbf/d;
 	      }
 	  }
       }
       
 /**
  * @brief Backprojects a keypoint (if stereo/depth info available) into 3D world coordinates.
- * @param  i 第i个keypoint
- * @return   3D点（相对于世界坐标系）
+ * @param  i  i-th keypoint
+ * @return   3D point (relative to the world coordinate system)
  */
-      // 得到 世界坐标系 坐标
+      // get the world coordinate system
       cv::Mat Frame::UnprojectStereo(const int &i)
       {
-	  // mvDepth是在ComputeStereoMatches函数中求取的
-          // mvDepth对应的校正前的特征点，可这里却是对校正后特征点反投影
-          // KeyFrame::UnprojectStereo中是对校正前的特征点mvKeys反投影
-          // 在ComputeStereoMatches函数中应该对校正后的特征点求深度？？ (wubo???)
 	  const float z = mvDepth[i];// 深度值
 	  if(z>0)
 	  {
-	    // 像素坐标值
+	    // pixel coordinate value
 	      const float u = mvKeysUn[i].pt.x;
 	      const float v = mvKeysUn[i].pt.y;
-	    // 像极坐标系 坐标
+	    // like polar coordinates
 	      const float x = (u-cx)*z*invfx;
 	      const float y = (v-cy)*z*invfy;
 	      cv::Mat x3Dc = (cv::Mat_<float>(3,1) << x, y, z);
