@@ -1,6 +1,6 @@
 /**
 * This file is part of ORB-SLAM2.
-* normal frame 
+* Normal frame 
 * Each image generates a frame
 * 
 */
