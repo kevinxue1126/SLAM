@@ -1,7 +1,7 @@
 /**
 * This file is part of ORB-SLAM2.
 * 
-* 各个工具库 变量类型转换
+* Various tool libraries Variable type conversion
 */
 
 
@@ -10,7 +10,7 @@
 namespace ORB_SLAM2
 {
 
-// Mat 类型描述子 转成 vector mat 类型
+// Mat type descriptor is converted to vector mat type
 std::vector<cv::Mat> Converter::toDescriptorVector(const cv::Mat &Descriptors)
 {
     std::vector<cv::Mat> vDesc;
@@ -20,7 +20,7 @@ std::vector<cv::Mat> Converter::toDescriptorVector(const cv::Mat &Descriptors)
     return vDesc;
 }
 
-// 4*4 mat形式的 位姿态  R t 转化成 G2O 6自由度顶点优化变量类型  李代数形式 SE3Quat  
+// 4*4 mat form of pose
 g2o::SE3Quat Converter::toSE3Quat(const cv::Mat &cvT)
 {
     Eigen::Matrix<double,3,3> R;
