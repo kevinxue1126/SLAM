@@ -150,7 +150,7 @@ namespace ORB_SLAM2
 	    threadF.join();
 	    // Step 4: Calculate the score ratio and select a model    
 	    // Compute ratio of scores
-	    float RH = SH/(SH+SF);// 计算 选着标志
+	    float RH = SH/(SH+SF);// calculate
 	    
 	    // Step 5: Recover R,t from the homography H or the fundamental matrix F
 	    // Try to reconstruct from homography or fundamental depending on the ratio (0.40-0.45)
