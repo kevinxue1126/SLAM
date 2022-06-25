@@ -1,6 +1,6 @@
 /**
 * This file is part of ORB-SLAM2.
-* 跟踪线程类
+* Track thread class
 */
 
 
@@ -28,7 +28,7 @@
 // for pointcloud mapping and viewing
 #include "pointcloudmapping.h"
 
-class PointCloudMapping;// 申明 点云可视化类
+class PointCloudMapping;
 
 
 namespace ORB_SLAM2
@@ -46,7 +46,6 @@ class Tracking
 
 public:
 
-// 跟踪类初始化=================
     //Tracking(System* pSys, ORBVocabulary* pVoc, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Map* pMap,
              //KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor);
     Tracking(System* pSys, ORBVocabulary* pVoc, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Map* pMap, 
@@ -92,10 +91,11 @@ public:
     Frame mCurrentFrame;
     cv::Mat mImGray;
 
-    cv::Mat mImDepth; // adding mImDepth member to realize pointcloud view
-                      // 添加一个深度图 作为 类的 成员变量，用来形成点云
-
-    cv::Mat mImRGB;   // 彩色图
+    // adding mImDepth member to realize pointcloud view
+    cv::Mat mImDepth; 
+                      
+    // color map
+    cv::Mat mImRGB;   
 
     // Initialization Variables (Monocular)
     std::vector<int> mvIniLastMatches;
@@ -122,20 +122,18 @@ protected:
     void Track();
 
     // Map initialization for stereo and RGB-D
-    // 双目/深度 相机 地图初始化
     void StereoInitialization();
 
     // Map initialization for monocular
-    // 单目地图初始化
-    void MonocularInitialization();// 初始化获得 初始位姿
-    void CreateInitialMapMonocular();// 最小化重投影 优化位姿 
+    void MonocularInitialization();
+    void CreateInitialMapMonocular();
 
     void CheckReplacedInLastFrame();
-    bool TrackReferenceKeyFrame();// 参考关键帧模式  当前帧和 最近一个关键帧 做匹配
+    bool TrackReferenceKeyFrame();
     void UpdateLastFrame();
-    bool TrackWithMotionModel();// 运动跟踪模式   当前帧和上一帧 做匹配
+    bool TrackWithMotionModel();
 
-    bool Relocalization();// 重定位  当前帧 和 所有关键帧 做匹配
+    bool Relocalization();
 
     void UpdateLocalMap();
     void UpdateLocalPoints();
@@ -154,12 +152,12 @@ protected:
     bool mbVO;
 
     //Other Thread Pointers
-    LocalMapping* mpLocalMapper;// 局部建图 
-    LoopClosing* mpLoopClosing;// 回环检测 
+    LocalMapping* mpLocalMapper;
+    LoopClosing* mpLoopClosing;
 
     //ORB
     ORBextractor* mpORBextractorLeft, *mpORBextractorRight;
-    ORBextractor* mpIniORBextractor;// 单目第一帧提取器
+    ORBextractor* mpIniORBextractor;
 
     //BoW
     ORBVocabulary* mpORBVocabulary;
@@ -168,26 +166,26 @@ protected:
     // Initalization (only for monocular)
     Initializer* mpInitializer;
 
-    //Local Map  局部地图
-    KeyFrame* mpReferenceKF;// 参考关键帧
-    std::vector<KeyFrame*> mvpLocalKeyFrames;// 局部 关键帧
-    std::vector<MapPoint*> mvpLocalMapPoints;// 局部地图点
+    //Local Map  
+    KeyFrame* mpReferenceKF;
+    std::vector<KeyFrame*> mvpLocalKeyFrames;
+    std::vector<MapPoint*> mvpLocalMapPoints;
     
     // System
-    System* mpSystem; // 系统对象
+    System* mpSystem;
     
-    //Drawers 可视化
+    //Drawers 
     Viewer* mpViewer;
     FrameDrawer* mpFrameDrawer;
     MapDrawer* mpMapDrawer;
 
-    //Map  地图
+    //Map  
     Map* mpMap;
 
-    //Calibration matrix  校正 矩阵
+    //Calibration matrix  
     cv::Mat mK;
     cv::Mat mDistCoef;
-    float mbf;// 基线 × 视差
+    float mbf;
 
     //New KeyFrame rules (according to fps)
     int mMinFrames;
@@ -211,7 +209,7 @@ protected:
     unsigned int mnLastRelocFrameId;
 
     //Motion Model
-    cv::Mat mVelocity;// mVelocity = mCurrentFrame.mTcw*LastTwc;//运动速度 为前后两针的 变换矩阵
+    cv::Mat mVelocity;// mVelocity = mCurrentFrame.mTcw*LastTwc;
 
     //Color order (true RGB, false BGR, ignored if grayscale)
     bool mbRGB;
@@ -220,7 +218,7 @@ protected:
 
 
     // for point cloud viewing
-    shared_ptr<PointCloudMapping> mpPointCloudMapping; // 点云地图类 共享指针 类成员变量
+    shared_ptr<PointCloudMapping> mpPointCloudMapping;
 };
 
 } //namespace ORB_SLAM
