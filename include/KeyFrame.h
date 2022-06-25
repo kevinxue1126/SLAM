@@ -1,8 +1,8 @@
 /**
 * This file is part of ORB-SLAM2.
-* 关键帧
+* Keyframe
 * 
-* 普通帧里面精选出来的具有代表性的帧
+* Selected representative frames from ordinary frames
 * 
 * 
 */
@@ -24,36 +24,33 @@
 namespace ORB_SLAM2
 {
 
-class Map;// 地图
-class MapPoint;// 地图点
-class Frame;// 普通帧
-class KeyFrameDatabase;//关键帧数据库  存储关键点 位姿态等信息 用于匹配
+class Map; //map
+class MapPoint; //map point
+class Frame; //normal frame
+class KeyFrameDatabase; //keyframe database 
 
 class KeyFrame
 {
 public:
-  // 初始化关键帧 
-  // 普通帧的 量全部复制过来
+    // Initialize keyframes
     KeyFrame(Frame &F, Map* pMap, KeyFrameDatabase* pKFDB);
 
     // Pose functions
     void SetPose(const cv::Mat &Tcw);
-    cv::Mat GetPose();// 位姿
-    cv::Mat GetPoseInverse();// 位姿
-    cv::Mat GetCameraCenter();// 单目 相机中心
-    cv::Mat GetStereoCenter();// 双目 相机中心
-    cv::Mat GetRotation();// 旋转矩阵
-    cv::Mat GetTranslation();// 平移向量
+    cv::Mat GetPose();         
+    cv::Mat GetPoseInverse();  
+    cv::Mat GetCameraCenter(); 
+    cv::Mat GetStereoCenter(); 
+    cv::Mat GetRotation();     
+    cv::Mat GetTranslation();  
 
     // Bag of Words Representation
-    // 计关键点 描述子 的  词典线性表示向量
     void ComputeBoW();
 
     // Covisibility graph functions
-    // 可视化 添加 线连接  关键点连线
     void AddConnection(KeyFrame* pKF, const int &weight);
-    void EraseConnection(KeyFrame* pKF);// 删除 线连接
-    void UpdateConnections();// 跟新线连接
+    void EraseConnection(KeyFrame* pKF);    
+    void UpdateConnections(); 
     void UpdateBestCovisibles();
     std::set<KeyFrame *> GetConnectedKeyFrames();
     std::vector<KeyFrame* > GetVectorCovisibleKeyFrames();
@@ -61,90 +58,81 @@ public:
     std::vector<KeyFrame*> GetCovisiblesByWeight(const int &w);
     int GetWeight(KeyFrame* pKF);
 
-    // Spanning tree functions 生成 关键帧 树 
-    void AddChild(KeyFrame* pKF);// 添加孩子
-    void EraseChild(KeyFrame* pKF);// 删除孩子
-    void ChangeParent(KeyFrame* pKF);// 跟换父亲
-    std::set<KeyFrame*> GetChilds();// 得到孩子
-    KeyFrame* GetParent();//得到父亲
-    bool hasChild(KeyFrame* pKF);// 有孩子吗
+    // Spanning tree functions 
+    void AddChild(KeyFrame* pKF);       
+    void EraseChild(KeyFrame* pKF);    
+    void ChangeParent(KeyFrame* pKF);  
+    std::set<KeyFrame*> GetChilds();   
+    KeyFrame* GetParent();             
+    bool hasChild(KeyFrame* pKF);      
 
-    // Loop Edges 环边
-    void AddLoopEdge(KeyFrame* pKF);// 添加
-    std::set<KeyFrame*> GetLoopEdges();// 获取
+    // Loop Edges
+    void AddLoopEdge(KeyFrame* pKF);
+    std::set<KeyFrame*> GetLoopEdges();
 
     // MapPoint observation functions
-    // 地图点 观测函数
-    void AddMapPoint(MapPoint* pMP, const size_t &idx);// 添加 地图点
-    void EraseMapPointMatch(const size_t &idx);// 删除地图点匹配
+    void AddMapPoint(MapPoint* pMP, const size_t &idx);
+    void EraseMapPointMatch(const size_t &idx);
     void EraseMapPointMatch(MapPoint* pMP);
-    void ReplaceMapPointMatch(const size_t &idx, MapPoint* pMP);// 替换地图点匹配
-    std::set<MapPoint*> GetMapPoints();// 得到地图点集合 set 指针
-    std::vector<MapPoint*> GetMapPointMatches();// 得到地图点匹配
-    int TrackedMapPoints(const int &minObs);// 跟踪到的地图点
-    MapPoint* GetMapPoint(const size_t &idx);//得到单个地图点
+    void ReplaceMapPointMatch(const size_t &idx, MapPoint* pMP);
+    std::set<MapPoint*> GetMapPoints();
+    std::vector<MapPoint*> GetMapPointMatches();
+    int TrackedMapPoints(const int &minObs);
+    MapPoint* GetMapPoint(const size_t &idx);
 
     // KeyPoint functions
-    // 关键点 方程
     std::vector<size_t> GetFeaturesInArea(const float &x, const float  &y, const float  &r) const;
     cv::Mat UnprojectStereo(int i);
 
     // Image
-    // 在图像里吗
     bool IsInImage(const float &x, const float &y) const;
 
     // Enable/Disable bad flag changes
-    // 使能/关能 
     void SetNotErase();
     void SetErase();
 
     // Set/check bad flag
-    // 设置标志  检查标志
     void SetBadFlag();
     bool isBad();
 
     // Compute Scene Depth (q=2 median). Used in monocular.
-    // 单目 环境 深度中值
     float ComputeSceneMedianDepth(const int q);
 
-    // 比较函数
+    // Comparison function
     static bool weightComp( int a, int b){
         return a>b;
     }
-   // 关键帧 先后顺序 
+    // Keyframe
     static bool lId(KeyFrame* pKF1, KeyFrame* pKF2){
         return pKF1->mnId<pKF2->mnId;
     }
 
 
     // The following variables are accesed from only 1 thread or never change (no mutex needed).
-    // 变量
 public:
+    // id 
+    static long unsigned int nNextId;
+    long unsigned int mnId;
+    const long unsigned int mnFrameId;
+    
+    // timestamp
+    const double mTimeStamp;
 
-    static long unsigned int nNextId;// 下一个关键帧 id
-    long unsigned int mnId;// 本关键帧 id
-    const long unsigned int mnFrameId;// 帧id
-
-    const double mTimeStamp;// 时间戳
-
-    // Grid (to speed up feature matching)
-    // 640 *480 图像 分成 64 × 48 个格子 加速 特征匹配
-    const int mnGridCols;// 64 列
-    const int mnGridRows;// 48 行
-    const float mfGridElementWidthInv;// 每一像素 占有的 格子数量
+    // Grid (to speed up feature matching) 64 × 48 
+    const int mnGridCols;
+    const int mnGridRows;
+    const float mfGridElementWidthInv;
     const float mfGridElementHeightInv;
 
     // Variables used by the tracking
-    long unsigned int mnTrackReferenceForFrame;// 参考帧
-    long unsigned int mnFuseTargetForKF;// 做过相邻匹配 标志 在 LocalMapping::SearchInNeighbors() 使用
+    long unsigned int mnTrackReferenceForFrame;
+    long unsigned int mnFuseTargetForKF;
 
     // Variables used by the local mapping
-    // 本地地图  最小化重投影误差 BA参数
     long unsigned int mnBALocalForKF;
     long unsigned int mnBAFixedForKF;
 
     // Variables used by the keyframe database
-    // 关键帧数据库 变量参数
     long unsigned int mnLoopQuery;
     int mnLoopWords;
     float mLoopScore;
@@ -153,45 +141,39 @@ public:
     float mRelocScore;
 
     // Variables used by loop closing
-    // 闭环检测 变量
     cv::Mat mTcwGBA;
     cv::Mat mTcwBefGBA;
     long unsigned int mnBAGlobalForKF;
 
     // Calibration parameters
-    // 校准参数 相机内参 基线*焦距 基线 深度
     const float fx, fy, cx, cy, invfx, invfy, mbf, mb, mThDepth;
 
     // Number of KeyPoints
-    // 关键点数量
-    const int N;// 
+    const int N;
 
     // KeyPoints, stereo coordinate and descriptors (all associated by an index)
-    // 关键点  校正后的关键点 匹配点横坐标 深度值  描述子
-    const std::vector<cv::KeyPoint> mvKeys;// 关键点
-    const std::vector<cv::KeyPoint> mvKeysUn;// 校正后的关键点
-    const std::vector<float> mvuRight; // negative value for monocular points 匹配点横坐标
-    const std::vector<float> mvDepth; // negative value for monocular points
-    const cv::Mat mDescriptors;// 描述子
+    const std::vector<cv::KeyPoint> mvKeys;
+    const std::vector<cv::KeyPoint> mvKeysUn;
+    const std::vector<float> mvuRight; 
+    const std::vector<float> mvDepth;
+    const cv::Mat mDescriptors;
 
     //BoW
-    // 词带模型
-    DBoW2::BowVector mBowVec;     // 描述子 词典单词 线性表示 的向量
-    DBoW2::FeatureVector mFeatVec;// feature vector of nodes and feature indexes
+    DBoW2::BowVector mBowVec;    
+    DBoW2::FeatureVector mFeatVec;
 
     // Pose relative to parent (this is computed when bad flag is activated)
-    cv::Mat mTcp;// 父位姿 到 当前关键帧 转换矩阵
+    cv::Mat mTcp;
 
-    // Scale  图像金字塔尺度信息
+    // Scale 
     const int mnScaleLevels;
     const float mfScaleFactor;
     const float mfLogScaleFactor;
     const std::vector<float> mvScaleFactors;
     const std::vector<float> mvLevelSigma2;
-    const std::vector<float> mvInvLevelSigma2;// g2o 优化时 对于边(误差) 的权重
+    const std::vector<float> mvInvLevelSigma2;
 
     // Image bounds and calibration
-    // 图像四个顶点  畸变校正后 得到 的图像 尺寸
     const int mnMinX;
     const int mnMinY;
     const int mnMaxX;
@@ -203,42 +185,41 @@ public:
 protected:
 
     // SE3 Pose and camera center
-    cv::Mat Tcw;// 世界 到 相机
-    cv::Mat Twc;// 相机 到 世界
-    cv::Mat Ow;//  相机坐标
+    cv::Mat Tcw;
+    cv::Mat Twc;
+    cv::Mat Ow;
 
-    cv::Mat Cw; // 双目相机中心点(基线中心)坐标 Stereo middel point. Only for visualization
+    // Stereo middel point. Only for visualization
+    cv::Mat Cw;
 
     // MapPoints associated to keypoints
-    // 地图点
     std::vector<MapPoint*> mvpMapPoints;
 
     // BoW
-    // 关键帧数据库  特征字典
     KeyFrameDatabase* mpKeyFrameDB;
     ORBVocabulary* mpORBvocabulary;
 
     // Grid over the image to speed up feature matching
-    // 格点 64*48个容器 每个容器内是一个容器 存储着 关键点 的 id
     std::vector< std::vector <std::vector<size_t> > > mGrid;
 
-    std::map<KeyFrame*,int> mConnectedKeyFrameWeights;// 帧 和 权重  key ：value 数对
+    // key and value
+    std::map<KeyFrame*,int> mConnectedKeyFrameWeights;
     std::vector<KeyFrame*> mvpOrderedConnectedKeyFrames;
     std::vector<int> mvOrderedWeights;
 
     // Spanning Tree and Loop Edges
-    // 生成树
     bool mbFirstConnection;
-    KeyFrame* mpParent;//父节点
-    std::set<KeyFrame*> mspChildrens;//子节点
-    std::set<KeyFrame*> mspLoopEdges;//环边
+    KeyFrame* mpParent;
+    std::set<KeyFrame*> mspChildrens;
+    std::set<KeyFrame*> mspLoopEdges;
 
     // Bad flags
     bool mbNotErase;
     bool mbToBeErased;
     bool mbBad;    
 
-    float mHalfBaseline; // Only for visualization  基线的一半 用于显示 
+    // Only for visualization
+    float mHalfBaseline;
 
     Map* mpMap;
 
