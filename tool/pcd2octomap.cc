@@ -29,24 +29,24 @@ int main(int argc, char** argv)
 
     cout << "point cloud loaded, point size = " << cloud.points.size() << endl;
 
-    //声明octomap变量
+    //Declare the octomap variable
     cout << "copy data into octomap..." << endl;
-    //创建带颜色的八叉树对象，参数为分辨率，这里设成了0.04
+    //Create an octree object with color, the parameter is resolution, here is set to 0.04
     octomap::ColorOcTree tree( 0.04 );
 
     for(auto p:cloud.points) {
-        //将点云里的点插入到octomap中
+        //Insert points from point cloud into octomap
         tree.updateNode(octomap::point3d(p.x, p.y, p.z), true);
     }
 
-    //设置颜色
+    //set color
     for(auto p:cloud.points) {
         tree.integrateNodeColor(p.x, p.y, p.z, p.r, p.g, p.b);
     }
 
-    //更新octomap
+    //update octomap
     tree.updateInnerOccupancy();
-    //存储octomap, 注意要存成.ot文件而非.bt文件
+    //Store the octomap, be careful to save it as a .ot file instead of a .bt file
     tree.write(output_file);
     cout << "done." << endl;
 
