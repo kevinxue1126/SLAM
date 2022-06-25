@@ -1,6 +1,6 @@
 /**
 * This file is part of ORB-SLAM2.
-* 关键帧显示
+* Keyframe display
 */
 
 #ifndef FRAMEDRAWER_H
