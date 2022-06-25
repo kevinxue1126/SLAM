@@ -18,9 +18,9 @@ for line in f:
     y.append( float(data[2] ) )
     z.append( float(data[3] ) )
 ax = plt.subplot( 111, projection='3d')
-ax.plot(x,y,z,'r')  # 红色线条
-ax.set_zlabel('Z')  # 坐标轴
+ax.plot(x,y,z,'r')  # Red lines
+ax.set_zlabel('Z')  # Axis
 ax.set_ylabel('Y')
 ax.set_xlabel('X')
-ax.set_title('GT trajectory')#图标题  
+ax.set_title('GT trajectory')#Figure title
 plt.show()
