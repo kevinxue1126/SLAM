@@ -418,7 +418,7 @@ namespace ORB_SLAM2
 	    //Information matrix, inverse of squared variance
 	    const float invSigmaSquare = 1.0/(sigma*sigma);//Variance Reciprocal
 	    
-           // N对特征匹配点
+           // N pairs of feature matching points
 	    for(int i=0; i<N; i++)/ / Calculate the symmetric transformation error generated when the homography matrix transforms each point pair
 	    {
 		bool bIn = true;
