@@ -115,7 +115,7 @@ namespace ORB_SLAM2
 	    // Step 2: Randomly select 8 pairs of matching feature points from all matching feature point pairs as a group, and select mMaxIterations group in total
 	    mvSets = vector< vector<size_t> >(mMaxIterations,vector<size_t>(8,0));
 
-	    DUtils::Random::SeedRandOnce(0);//随机数
+	    DUtils::Random::SeedRandOnce(0);
 
 	    for(int it=0; it<mMaxIterations; it++)
 	    {
@@ -332,7 +332,7 @@ namespace ORB_SLAM2
 	 * @param  vP1 normalized point, in reference frame
 	 * @param  vP1 normalized point, in reference frame
 	 * @return  Fundamental matrix
-	 * @see    Multiple View Geometry in Computer Vision - Algorithm 11.1 p282 (中文版 p191)
+	 * @see    Multiple View Geometry in Computer Vision - Algorithm 11.1 p282 
 	 */
 	cv::Mat Initializer::ComputeF21(const vector<cv::Point2f> &vP1,const vector<cv::Point2f> &vP2)
 	{
@@ -698,7 +698,7 @@ namespace ORB_SLAM2
 	    float d2 = w.at<float>(1);
 	    float d3 = w.at<float>(2);
 	    
-            // The normal case for SVD decomposition is that the eigenvalues ​​are arranged in descending order
+            // The normal case for SVD decomposition is that the eigenvalues are arranged in descending order
 	    if(d1/d2<1.00001 || d2/d3<1.00001)
 	    {
 		return false;
@@ -912,7 +912,7 @@ namespace ORB_SLAM2
            // Scale the x-coordinate and y-coordinate respectively, so that the first-order absolute moments of the x-coordinate and y-coordinate are 1, respectively
 	    for(int i=0; i<N; i++)
 	    {
-		vNormalizedPoints[i].x = vNormalizedPoints[i].x * sX;// 去均值点坐标 * 绝对矩倒数
+		vNormalizedPoints[i].x = vNormalizedPoints[i].x * sX;
 		vNormalizedPoints[i].y = vNormalizedPoints[i].y * sY;
 	    }
 		// |sX  0  -meanx*sX|
