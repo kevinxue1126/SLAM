@@ -1,6 +1,7 @@
 /**
 * This file is part of ORB-SLAM2.
-* orb特征字典 创建特征的字典线性表示向量 加快匹配
+* orb feature dictionary
+* Create a lexicographic linear representation vector of features to speed up matching
 */
 
 
