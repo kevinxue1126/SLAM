@@ -626,7 +626,7 @@ namespace ORB_SLAM2
 	      const int minr = floor(kpY-r);
 
 	      for(int yi=minr;yi<=maxr;yi++)
-		  vRowIndices[yi].push_back(iR);// 右图 带状区域
+		  vRowIndices[yi].push_back(iR);
 	  }
 
 	  // Set limits for search
@@ -804,7 +804,7 @@ namespace ORB_SLAM2
       // get the world coordinate system
       cv::Mat Frame::UnprojectStereo(const int &i)
       {
-	  const float z = mvDepth[i];// 深度值
+	  const float z = mvDepth[i];
 	  if(z>0)
 	  {
 	    // pixel coordinate value
