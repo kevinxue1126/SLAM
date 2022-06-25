@@ -290,7 +290,7 @@ namespace ORB_SLAM2
             	    // VI-B Condition 2: No less than 2 frames have elapsed since the establishment of this point, 
 		    // but the number of key frames observed at this point does not exceed cnThObs frames, then the point inspection fails
 		    pMP->SetBadFlag();
-		    lit = mlpRecentAddedMapPoints.erase(lit);//从待查  list中删除
+		    lit = mlpRecentAddedMapPoints.erase(lit);//Remove from pending list
 		}
 		else if(((int)nCurrentKFid - (int)pMP->mnFirstKFid ) >= 3)
 		    // Step 4: Since the establishment of this point, 3 frames have passed (the map points in the first three frames are more valuable and need special inspection), and the detection of the MapPoint is abandoned	  
