@@ -1,6 +1,6 @@
 /**
 * This file is part of ORB-SLAM2.
-* 在胖果林中绘制地图点、关键帧
+* Draw map points and keyframes in the fat fruit forest
 */
 
 #ifndef MAPDRAWER_H
