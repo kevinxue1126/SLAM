@@ -1,15 +1,15 @@
 /**
 * This file is part of ORB-SLAM2.
-*  局部建图
-* LocalMapping作用是将Tracking中送来的关键帧放在mlNewKeyFrame列表中；
-* 处理新关键帧，地图点检查剔除，生成新地图点，Local BA，关键帧剔除。
-* 主要工作在于维护局部地图，也就是SLAM中的Mapping。
+* LocalMapping
+* The function of LocalMapping is to put the key frame sent in Tracking in the mlNewKeyFrame list
+* Process new keyframes, map point check and culling, generate new map points, Local BA, keyframe culling.
+* The main work is to maintain the local map, that is, the Mapping in SLAM.
 * 
-* Tracking线程 只是判断当前帧是否需要加入关键帧，并没有真的加入地图，
-* 因为Tracking线程的主要功能是局部定位，
+* The Tracking thread only judges whether the current frame needs to be added to a key frame, 
+* and does not really add a map, because the main function of the Tracking thread is local positioning.
 * 
-* 而处理地图中的关键帧，地图点，包括如何加入，
-* 如何删除的工作是在LocalMapping线程完成的
+* The work of processing key frames and map points in the map, 
+* including how to join and delete, is done in the LocalMapping thread
 * 
 */
 
@@ -68,29 +68,17 @@ public:
     }
 
 protected:
-
+    
     bool CheckNewKeyFrames();
     
- // 处理新关键帧：ProcessNewKeyFrame()   
-/*a. 根据词典 计算当前关键帧Bow，便于后面三角化恢复新地图点；
-b. 将TrackLocalMap中跟踪局部地图匹配上的地图点绑定到当前关键帧
-    （在Tracking线程中只是通过匹配进行局部地图跟踪，优化当前关键帧姿态），
-    也就是在graph 中加入当前关键帧作为node，并更新edge。
-    
-    而CreateNewMapPoint()中则通过当前关键帧，在局部地图中添加与新的地图点；
-
-c. 更新加入当前关键帧之后关键帧之间的连接关系，包括更新Covisibility图和Essential图
- （最小生成树spanning tree，共视关系好的边subset of edges from covisibility graph 
-   with high covisibility (θ=100)， 闭环边）。
-*/
+    // Process new keyframes：ProcessNewKeyFrame()   
     void ProcessNewKeyFrame();
     
- // 而CreateNewMapPoint()中则通过当前关键帧，在局部地图中添加与新的地图点；   
+    // In CreateNewMapPoint(), new map points are added to the local map through the current keyframe
     void CreateNewMapPoints();
     
-// 对于ProcessNewKeyFrame和CreateNewMapPoints中最近添加的MapPoints进行检查剔除
+    // Check culling for recently added MapPoints in ProcessNewKeyFrame and CreateNewMapPoints
     void MapPointCulling();
-    
     
     void SearchInNeighbors();
 
