@@ -59,27 +59,27 @@ namespace ORB_SLAM2
 	  while(1)
 	  {
 	      // Check if there are keyframes in the queue
-	    // Loopclosing中的关键帧是LocalMapping发送过来的，LocalMapping是Tracking中发过来的
-	    // 在LocalMapping中通过InsertKeyFrame将关键帧插入闭环检测队列mlpLoopKeyFrameQueue
-// 步骤1： 闭环检测队列mlpLoopKeyFrameQueue中的关键帧不为空 会一直处理
+	      // The key frames in Loopclosing are sent from LocalMapping, and LocalMapping is sent from Tracking
+	      // Insert keyframes into closed-loop detection queue mlpLoopKeyFrameQueue through InsertKeyFrame in LocalMapping
+	      // Step 1: The key frame in the closed-loop detection queue mlpLoopKeyFrameQueue is not empty and will be processed all the time
 	      if(CheckNewKeyFrames())
 	      {
 		  // Detect loop candidates and check covisibility consistency
-// 步骤2：检测是否发生闭环 有相似的关键帧出现 		
+		  // Step 2: Detect whether loop closure occurs and similar keyframes appear 		
 		  if(DetectLoop())
 		  {
 		    // Compute similarity transformation [sR|t]
 		    // In the stereo/RGBD case s=1
-//步骤3： 发生闭环 计算相似变换  [sR|t]
+		    // Step 3: Loop closure occurs, computing similarity transformation [sR|t]
 		    if(ComputeSim3())
 		    {
 			// Perform loop fusion and pose graph optimization
-//步骤4： 闭环 融合 位姿  图优化      
+			// Step 4: Loop Closure, Fusion, Pose and Graph Optimization      
 			CorrectLoop();
 		    }
 		  }
 	      }       
-//步骤5：  初始重置请求
+	      //Step 5: Initial Reset Request
 	      ResetIfRequested();
 
 	      if(CheckFinish())
@@ -91,10 +91,10 @@ namespace ORB_SLAM2
 	  SetFinish();
       }
       
-/**
- * @brief    将关键帧 插入到  关键帧闭环检测队列中
- * @return  无
- */
+      /**
+	* @brief   Insert keyframes into the keyframe loop closure detection queue
+	* @return  None
+	*/
       void LoopClosing::InsertKeyFrame(KeyFrame *pKF)
       {
 	  unique_lock<mutex> lock(mMutexLoopQueue);
@@ -102,38 +102,38 @@ namespace ORB_SLAM2
 	      mlpLoopKeyFrameQueue.push_back(pKF);
       }
       
-/**
- * @brief 查看列表中是否有等待处理的 闭环检测帧关键帧
- * @return 如果存在，返回true
- */
+      /**
+	* @brief Check if there are any pending loop detection frame keyframes in the list
+	* @return Returns true if it exists
+	*/
       bool LoopClosing::CheckNewKeyFrames()
       {
 	  unique_lock<mutex> lock(mMutexLoopQueue);
 	  return(!mlpLoopKeyFrameQueue.empty());
       }
       
-/**
- * @brief    检测是否发生闭环 出现相识的 关键帧
- * @return 如果存在，返回true
- */
+	/**
+	 * @brief    Detect whether a closed loop occurs, and a familiar key frame appears
+	 * @return   Returns true if it exists
+	 */
       bool LoopClosing::DetectLoop()
       {
 	
-// 步骤1： 从队列中取出一个关键帧	
+	  // Step 1: Take a keyframe from the queue	
 	  {
 	      unique_lock<mutex> lock(mMutexLoopQueue);
 	      mpCurrentKF = mlpLoopKeyFrameQueue.front();
 	      mlpLoopKeyFrameQueue.pop_front();//出队
 	      // Avoid that a keyframe can be erased while it is being process by this thread
-	      mpCurrentKF->SetNotErase();//不能删除
+	      mpCurrentKF->SetNotErase();
 	  }
 
 	  //If the map contains less than 10 KF or less than 10 KF have passed from last loop detection
-// 步骤2：如果距离上次闭环没多久（小于10帧），或者map中关键帧总共还没有10帧，则不进行闭环检测	  
+	  // Step 2: If it is not long since the last closed loop (less than 10 frames), or if there are not 10 key frames in the map in total, the closed loop detection will not be performed.	  
 	  if(mpCurrentKF->mnId < mLastLoopKFid+10)
 	  {
-	      mpKeyFrameDB->add(mpCurrentKF);//加入关键帧数据库
-	      mpCurrentKF->SetErase();//删除 不进行 闭环检测
+	      mpKeyFrameDB->add(mpCurrentKF);//Add keyframe database
+	      mpCurrentKF->SetErase();
 	      return false;
 	  }
 
