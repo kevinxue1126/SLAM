@@ -1,24 +1,24 @@
 /**
 * This file is part of ORB-SLAM2.
-* 回环检测
-* 对新加入的关键帧 进行回环检测(WOB 二进制词典匹配检测，通过Sim3算法计算相似变换)---------> 闭环校正(闭环融合 和 图优化)
+* loopback detection
+* For newly added key frames, perform loop closure detection (WOB binary dictionary matching detection, calculate similarity transformation through Sim3 algorithm) ---------> Closed loop correction (closed loop fusion and graph optimization)
 * 
-* 闭环检测
-* mlpLoopKeyFrameQueue  关键帧队列（localMapping线程 加入的）
-* 1】队列中取一帧 参数                                              minCommons minScoreToRetain  >>>  mpCurrentKF
-* 2】判断距离上次闭环检测是否超过10帧
-* 3】计算当前帧与相连关键帧的 词带 BOW 匹配 最低得分     minScore     mpCurrentKF
-* 4】检测得到闭环候选帧 vpLoopConnectedKFs
-* 5】检测候选帧连续性  相邻一起的 分成一组 组与组相邻的再成组    (pKF, minScore)  ？
-* 6】找出与当前帧有 公共单词的 非相连 关键帧 lKFsharingwords
-* 7】统计候选帧中 与 pKF 具有共同单词最多的单词数 maxcommonwords
-* 8】得到阈值 minCommons = 0.8 × maxcommonwords  
-* 9】筛选共有单词大于 minCommons  且词带 BOW 匹配 最低得分  大于  minScore      lscoreAndMatch
-* a】将存在相连的分为一组， 计算组最高得分 bestAccScore，同时得到每组中得分最高的关键帧  lsAccScoreAndMatch
-* b】得到阈值 minScoreToRetain = 0.75  ×  bestAccScore  
-* c】得到 闭环检测候选帧
-* e】计算 闭环处两针的 相似变换  [sR|t]
-* f】闭环 融合 位姿 图优化
+* Closed loop detection
+* mlpLoopKeyFrameQueue  Key frame queue (joined by localMapping thread)
+* 1】Take a frame parameter from the queue minCommons minScoreToRetain >>> mpCurrentKF
+* 2】Determine if it is more than 10 frames away from the last closed-loop detection
+* 3】Calculate the word band BOW match between the current frame and the connected key frame, the lowest score minScore mpCurrentKF
+* 4】Detect closed loop candidate frames vpLoopConnectedKFs
+* 5】Detect the continuity of candidate frames, group adjacent ones into a group, and group adjacent groups into groups (pKF, minScore)
+* 6】Find non-connected and keyframes that have words in common with the current frame lKFsharingwords
+* 7】Count the number of words with the most common words in the candidate frame and pKF maxcommonwords
+* 8】get the threshold minCommons = 0.8 × maxcommonwords  
+* 9】Filter common words greater than minCommons and words with BOW matches, and the minimum score is greater than minScore lscoreAndMatch
+* a】Divide the existing ones into one group, calculate the highest score bestAccScore in the group, and get the key frame with the highest score in each group lsAccScoreAndMatch
+* b】get the threshold minScoreToRetain = 0.75  ×  bestAccScore  
+* c】Get the closed loop detection candidate frame
+* e】Calculate the similarity transformation [sR|t] of the two stitches at the closed loop
+* f】Loop closure, fusion, pose and graph optimization
 */
 
 #include "LoopClosing.h"
