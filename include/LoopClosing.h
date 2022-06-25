@@ -1,6 +1,6 @@
 /**
 * This file is part of ORB-SLAM2.
-* 闭环检测
+* Closed loop detection
 */
 
 #ifndef LOOPCLOSING_H
@@ -30,9 +30,9 @@ class LoopClosing
 {
 public:
 
-    typedef pair<set<KeyFrame*>,int> ConsistentGroup;    // 具有连续性的候选帧
+    typedef pair<set<KeyFrame*>,int> ConsistentGroup; 
     typedef map<KeyFrame*,g2o::Sim3,std::less<KeyFrame*>,
-    Eigen::aligned_allocator<std::pair<const KeyFrame*, g2o::Sim3> > > KeyFrameAndPose;// 帧 对应的 sim3位姿
+    Eigen::aligned_allocator<std::pair<const KeyFrame*, g2o::Sim3> > > KeyFrameAndPose;
 
 public:
 
@@ -107,11 +107,11 @@ protected:
     // Loop detector variables
     KeyFrame* mpCurrentKF;
     KeyFrame* mpMatchedKF;
-    std::vector<ConsistentGroup> mvConsistentGroups;// 具有连续性的候选帧 群组
+    std::vector<ConsistentGroup> mvConsistentGroups;
     std::vector<KeyFrame*> mvpEnoughConsistentCandidates;
     std::vector<KeyFrame*> mvpCurrentConnectedKFs;
-    std::vector<MapPoint*> mvpCurrentMatchedPoints;//当前帧 闭环检测得到的 匹配地图点
-    std::vector<MapPoint*> mvpLoopMapPoints;// 当前帧 相邻关键帧上的 地图点 闭环处的地图点
+    std::vector<MapPoint*> mvpCurrentMatchedPoints;
+    std::vector<MapPoint*> mvpLoopMapPoints;
     cv::Mat mScw;
     g2o::Sim3 mg2oScw;
 
@@ -125,7 +125,7 @@ protected:
     std::thread* mpThreadGBA;
 
     // Fix scale in the stereo/RGB-D case
-    bool mbFixScale;// 双目/深度 固定的 空间尺度
+    bool mbFixScale;
 
 
     bool mnFullBAIdx;
