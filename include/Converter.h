@@ -1,6 +1,6 @@
 /**
 * This file is part of ORB-SLAM2.
-* 各种数据转换
+* Various data conversions
 */
 
 #ifndef CONVERTER_H
@@ -20,7 +20,7 @@ class Converter
 public:
     static std::vector<cv::Mat> toDescriptorVector(const cv::Mat &Descriptors);
 
-   // 4*4 mat形式的 位姿态  R t 转化成 G2O 6自由度顶点优化变量类型  李代数形式 SE3Quat  
+   // pose in 4*4 mat form  Rt Convert to G2O 6DOF vertex optimization variable type  Lie algebra form SE3Quat 
     static g2o::SE3Quat toSE3Quat(const cv::Mat &cvT);
     
     static g2o::SE3Quat toSE3Quat(const g2o::Sim3 &gSim3);// 李代数形式
