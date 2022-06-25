@@ -35,6 +35,7 @@ class Map;
 class LocalMapping
 {
 public:
+    
     LocalMapping(Map* pMap, const float bMonocular);
 
     void SetLoopCloser(LoopClosing* pLoopCloser);
