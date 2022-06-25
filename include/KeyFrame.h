@@ -110,12 +110,12 @@ public:
 
     // The following variables are accesed from only 1 thread or never change (no mutex needed).
 public:
-    // id 
+    // ID 
     static long unsigned int nNextId;
     long unsigned int mnId;
     const long unsigned int mnFrameId;
     
-    // timestamp
+    // Timestamp
     const double mTimeStamp;
 
     // Grid (to speed up feature matching) 64 × 48 
@@ -202,7 +202,7 @@ protected:
     // Grid over the image to speed up feature matching
     std::vector< std::vector <std::vector<size_t> > > mGrid;
 
-    // key and value
+    // Key and Value
     std::map<KeyFrame*,int> mConnectedKeyFrameWeights;
     std::vector<KeyFrame*> mvpOrderedConnectedKeyFrames;
     std::vector<int> mvOrderedWeights;
