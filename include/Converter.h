@@ -23,7 +23,7 @@ public:
    // pose in 4*4 mat form  Rt Convert to G2O 6DOF vertex optimization variable type  Lie algebra form SE3Quat 
     static g2o::SE3Quat toSE3Quat(const cv::Mat &cvT);
     
-    static g2o::SE3Quat toSE3Quat(const g2o::Sim3 &gSim3);// 李代数形式
+    static g2o::SE3Quat toSE3Quat(const g2o::Sim3 &gSim3);// Lie algebra form
 
     static cv::Mat toCvMat(const g2o::SE3Quat &SE3);
     static cv::Mat toCvMat(const g2o::Sim3 &Sim3);
