@@ -1,21 +1,23 @@
 /**
- *关键帧数据库
- * 存储所有关键帧
- * 关键帧数据库通过预先训练好的词典，
- * 维护一个向量std::vector<list<KeyFrame*> > mvInvertedFile;
- * 该向量中mvInvertedFile[i]表示包含了第i个WordId的所有关键帧；
+ * Keyframe database
+ * Store all keyframes
+ * The key frame database maintains a vector std::vector<list<KeyFrame*> > mvInvertedFile through a pre-trained dictionary; 
+ * mvInvertedFile[i] in this vector represents all key frames containing the i-th WordId;
  * 
- * 该类的主要作用是在回环检测和重定位中，根据词袋模型的特征匹配度，找到闭环候选帧和重定位候选帧，两者之间的区别在于，需要参考关键帧去寻找闭环候选帧，而重定位则参考普通帧。
-
-主要步骤是：
-1. 找出与当前帧pKF有公共单词的所有关键帧pKFi，不包括与当前帧相连的关键帧；
-2. 统计所有闭环候选帧中与pKF具有共同单词最多的单词数，只考虑共有单词数大于
-    0.8*maxCommonWords以及匹配得分大于给定的minScore的关键帧，存入lScoreAndMatch；
-3. 对于第二步中筛选出来的pKFi，每一个都要抽取出自身的共视（共享地图点最多的前10帧）
-    关键帧分为一组，计算该组整体得分（与pKF比较的），记为bestAccScore；
-所有组得分大于0.75*bestAccScore的，均当作闭环候选帧。
-若想改变闭环检测候选帧的参数，根据场景鉴定闭环的阈值，可以在这里修改参数。
-*/
+ * The main function of this class is to find closed-loop candidate frames and relocation candidate frames according to the feature matching degree of the bag of words model in loop closure detection and relocation. 
+ * The difference between the two is that you need to refer to key frames to find closed-loop candidate frames, 
+ * while relocations refer to normal frames.
+ * 
+ * The main steps are:
+ * 1. Find all key frames pKFi that have a common word with the current frame pKF, excluding key frames connected to the current frame;
+ * 2. Count the number of words that have the most common words with pKF in all closed-loop candidate frames, 
+ * only consider the key frames with the number of common words greater than 0.8*maxCommonWords and the matching score greater than the given minScore, and store them in lScoreAndMatch;
+ * 3. For the pKFis screened in the second step, each one must extract its own co-view (the first 10 frames with the most shared map points) key frames into a group, 
+ * and calculate the overall score of the group (compared with pKF) , denoted as bestAccScore;
+ * 
+ * All groups with scores greater than 0.75*bestAccScore are regarded as closed-loop candidate frames.
+ * If you want to change the parameters of the closed-loop detection candidate frame, and identify the closed-loop threshold according to the scene, you can modify the parameters here.
+ */
 
 #include "KeyFrameDatabase.h"
 
