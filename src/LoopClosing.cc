@@ -140,34 +140,34 @@ namespace ORB_SLAM2
 	  // Compute reference BoW similarity score
 	  // This is the lowest score to a connected keyframe in the covisibility graph
 	  // We will impose loop candidates to have a higher similarity than this
- // 步骤3：遍历所有共视关键帧，计算当前关键帧与每个共视关键帧 的bow相似度得分，并得到最低得分minScore
-          // 当前帧的所有 共视关键帧 
+ 	  // Step 3: Traverse all co-view key frames, calculate the bow similarity score between the current key frame and each co-view key frame, and get the minimum score minScore
+          // All common view keyframes for the current frame 
 	  const vector<KeyFrame*> vpConnectedKeyFrames = mpCurrentKF->GetVectorCovisibleKeyFrames();
-	  const DBoW2::BowVector &CurrentBowVec = mpCurrentKF->mBowVec;// 当前帧的 BoW 字典单词描述向量
+	  const DBoW2::BowVector &CurrentBowVec = mpCurrentKF->mBowVec;// BoW dictionary word description vector for the current frame
 	  float minScore = 1;
-	  // 遍历每一个共视关键帧
+	  // Iterate over each common view keyframe
 	  for(size_t i=0; i<vpConnectedKeyFrames.size(); i++)
 	  {
-	      KeyFrame* pKF = vpConnectedKeyFrames[i];// 每一个共视关键帧
+	      KeyFrame* pKF = vpConnectedKeyFrames[i];// each common view keyframe
 	      if(pKF->isBad())
 		  continue;
-	      const DBoW2::BowVector &BowVec = pKF->mBowVec;// 每一个共视关键帧 的 BoW 字典单词描述向量
+	      const DBoW2::BowVector &BowVec = pKF->mBowVec;// BoW dictionary word description vector for each co-view keyframe
 
-	      float score = mpORBVocabulary->score(CurrentBowVec, BowVec);// 匹配得分小越相似 越大差异越大
+	      float score = mpORBVocabulary->score(CurrentBowVec, BowVec);// The smaller the matching score, the more similar, the larger the greater the difference.
 
 	      if(score < minScore)
-		  minScore = score;// 最低得分minScore
+		  minScore = score;// Minimum score minScore
 	  }
 	  
- // 步骤4：在所有关键帧数据库中找出与当前帧按最低得分minScore 匹配的 闭环备选帧
+ 	  // Step 4: Find the closed-loop candidate frame that matches the current frame with the lowest score minScore in all keyframe databases
 	  // Query the database imposing the minimum score
 	  vector<KeyFrame*> vpCandidateKFs = mpKeyFrameDB->DetectLoopCandidates(mpCurrentKF, minScore);
 
 	  // If there are no loop candidates, just add new keyframe and return false
-	  if(vpCandidateKFs.empty())// 没有闭环候选帧
+	  if(vpCandidateKFs.empty())// no closed loop candidate frame
 	  {
-	      mpKeyFrameDB->add(mpCurrentKF);//添加一个新的关键帧 到关键帧数据库
-	      mvConsistentGroups.clear();// 具有连续性的候选帧 群组 清空
+	      mpKeyFrameDB->add(mpCurrentKF);//Add a new keyframe to the keyframe database
+	      mvConsistentGroups.clear();// Continuity of candidate frame groups
 	      mpCurrentKF->SetErase();
 	      return false;
 	  }
@@ -176,61 +176,61 @@ namespace ORB_SLAM2
 	  // Each candidate expands a covisibility group (keyframes connected to the loop candidate in the covisibility graph)
 	  // A group is consistent with a previous group if they share at least a keyframe
 	  // We must detect a consistent loop in several consecutive keyframes to accept it
-// 步骤5：在候选帧中检测 具有连续性的 候选帧
-	  // 1、每个候选帧将与自己相连的关键帧构成一个“子候选组 spCandidateGroup ”，vpCandidateKFs --> spCandidateGroup
-	  // 2、检测“ 子候选组 ”中每一个关键帧是否存在于“ 连续组 ”，如果存在 nCurrentConsistency ++，则将该“子候选组”放入“当前连续组 vCurrentConsistentGroups ”
-	  // 3、如果 nCurrentConsistency 大于等于3，那么该”子候选组“代表的候选帧过关，进入 mvpEnoughConsistentCandidates  
-	  mvpEnoughConsistentCandidates.clear();// 最终筛选后得到的闭环帧
-	  // ConsistentGroup 数据类型为pair<set<KeyFrame*>,int>
-	   // ConsistentGroup.firs 对应每个“连续组”中的关键帧，ConsistentGroup.second 为每个“连续组”的序号
-	  vector<ConsistentGroup> vCurrentConsistentGroups;//具有连续性的候选帧 群组
-	  vector<bool> vbConsistentGroup(mvConsistentGroups.size(),false);// 子连续组 是否连续
-       // 步骤5.1： 遍历  每一个  闭环 候选帧
+	  // Step 5: Detect in candidate frames, candidate frames with continuity
+	  // 1. Each candidate frame forms a "sub-candidate group spCandidateGroup" with the key frames connected to itself, vpCandidateKFs --> spCandidateGroup
+	  // 2. Detect whether each key frame in the "sub-candidate group" exists in the "continuous group", if there is nCurrentConsistency++, put the "sub-candidate group" into the "current continuous group vCurrentConsistentGroups"
+	  // 3. If nCurrentConsistency is greater than or equal to 3, then the candidate frame represented by the "sub-candidate group" passes the test and enters mvpEnoughConsistentCandidates 
+	  mvpEnoughConsistentCandidates.clear();// Closed-loop frame obtained after final screening
+	  // ConsistentGroup data type is pair<set<KeyFrame*>,int>
+	   // ConsistentGroup.firs corresponds to the key frame in each "continuous group", and ConsistentGroup.second is the serial number of each "continuous group"
+	  vector<ConsistentGroup> vCurrentConsistentGroups;//Continuity of candidate frame groups
+	  vector<bool> vbConsistentGroup(mvConsistentGroups.size(),false);// Whether the sub-continuous group is continuous
+       	  // Step 5.1: Traverse each closed-loop candidate frame
 	  for(size_t i=0, iend=vpCandidateKFs.size(); i<iend; i++)
 	  {
-	      KeyFrame* pCandidateKF = vpCandidateKFs[i];// 每一个  闭环 候选帧
+	      KeyFrame* pCandidateKF = vpCandidateKFs[i];// Each closed-loop candidate frame
 	      
-       // 步骤5.2：  将自己以及与自己相连的关键帧构成一个“子候选组”
-	      set<KeyFrame*> spCandidateGroup = pCandidateKF->GetConnectedKeyFrames();// 与自己相连的关键帧
-	      spCandidateGroup.insert(pCandidateKF);// 自己也算进去
+       	      // Step 5.2: Form a "sub-candidate group" of itself and the keyframes connected to it
+	      set<KeyFrame*> spCandidateGroup = pCandidateKF->GetConnectedKeyFrames();// keyframe connected to self
+	      spCandidateGroup.insert(pCandidateKF);// count yourself
 
 	      bool bEnoughConsistent = false;
 	      bool bConsistentForSomeGroup = false;
 	      
-         // 步骤5.3：  遍历之前的“子连续组”
+              // Step 5.3: Traverse the previous "sub-continuous group"
 	      for(size_t iG=0, iendG=mvConsistentGroups.size(); iG<iendG; iG++)
 	      {
-	     // 取出一个之前的 子连续组
+	     	   // Take a previous subconsecutive group
 		  set<KeyFrame*> sPreviousGroup = mvConsistentGroups[iG].first;
-		  // 遍历每个“子候选组”，检测候选组中每一个关键帧在“子连续组”中是否存在
-		  // 如果有一帧共同存在于“ 子候选组 ”与之前的“ 子连续组 ”，那么“ 子候选组 ”与该“ 子连续组 ”连续
+		  // Traverse each "sub-candidate group" and detect whether each key frame in the candidate group exists in the "sub-continuous group"
+		  // If a frame coexists in the "sub-candidate group" and the previous "sub-consecutive group", then the "sub-candidate group" is contiguous with the "sub-consecutive group"
 		  bool bConsistent = false;
 		  // set<KeyFrame*>::iterator
-	 // 步骤5.4：	遍历  每个 子候选组, 检测候选组中每一个关键帧在“子连续组”中是否存在
+	 	  // Step 5.4: Traverse each sub-candidate group to detect whether each key frame in the candidate group exists in the "sub-continuous group"
 		  for(auto sit=spCandidateGroup.begin(), send=spCandidateGroup.end(); sit != send; sit++)
 		  {
-		      if(sPreviousGroup.count(*sit))// 有一帧共同存在于“ 子候选组 ”与之前的“ 子连续组 ”
+		      if(sPreviousGroup.count(*sit))// There is a frame that co-exists in the "sub-candidate group" and the previous "sub-consecutive group"
 		      {
-			  bConsistent=true;// 那么“ 子候选组 ”与该“ 子连续组 ”连续
+			  bConsistent=true;// Then the "sub-candidate group" is contiguous with this "sub-continuous group"
 			  bConsistentForSomeGroup=true;
 			  break;
 		      }
 		  }
-         // 步骤5.5 ： 连续
+         	  // Step 5.5: Continuous
 		  if(bConsistent)
 		  {
-		      int nPreviousConsistency = mvConsistentGroups[iG].second;//与子候选组 连续的  之前一个子 连续组 序号
-		      int nCurrentConsistency = nPreviousConsistency + 1;//当前子 连续组 序号
-		      if(!vbConsistentGroup[iG])// 子连续组 未连续
+		      int nPreviousConsistency = mvConsistentGroups[iG].second;//the previous sub-contiguous group that is contiguous with the sub-candidate group
+		      int nCurrentConsistency = nPreviousConsistency + 1;//current subcontiguous group
+		      if(!vbConsistentGroup[iG])// Subcontiguous group, not contiguous
 		      {
-			  ConsistentGroup cg = make_pair(spCandidateGroup,nCurrentConsistency);//子候选帧 对应 连续组序号
+			  ConsistentGroup cg = make_pair(spCandidateGroup,nCurrentConsistency);//Consecutive group number corresponding to the sub-candidate frame
 			  vCurrentConsistentGroups.push_back(cg);
-			  vbConsistentGroup[iG]=true; // 设置连续组 连续标志
+			  vbConsistentGroup[iG]=true; // Set the continuation flag for a continuation group
 			  //this avoid to include the same group more than once
 		      }
 		      if(nCurrentConsistency >= mnCovisibilityConsistencyTh && !bEnoughConsistent)
 		      {
-			  mvpEnoughConsistentCandidates.push_back(pCandidateKF);// 闭环 候选帧
+			  mvpEnoughConsistentCandidates.push_back(pCandidateKF);// Closed-loop candidate frame
 			  bEnoughConsistent=true; //this avoid to insert the same candidate more than once
 		      }
 		      
