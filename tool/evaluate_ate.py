@@ -110,7 +110,7 @@ def align(model,data):
 def plot_traj(ax,stamps,traj,style,color,label):
     """
     Plot a trajectory using matplotlib. 
-    2D图
+    2D map
     Input:
     ax -- the plot
     stamps -- time stamps (1xn)
@@ -141,7 +141,7 @@ def plot_traj(ax,stamps,traj,style,color,label):
 def plot_traj3D(ax,stamps,traj,style,color,label):
     """
     Plot a trajectory using matplotlib. 
-    3D图
+    3D map
     Input:
     ax -- the plot
     stamps -- time stamps (1xn)
