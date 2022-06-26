@@ -1952,86 +1952,85 @@ CreateNewKeyFrame()  两个函数来完成。
 	
 
 
-// 重定位
-/*
- 重定位Relocalization的过程大概是这样的：
-1. 计算当前帧的BoW映射；
-2. 在关键帧数据库中找到相似的候选关键帧；
-3. 通过BoW匹配当前帧和每一个候选关键帧，如果匹配数足够 >15，进行EPnP求解；
-    
-4. 对求解结果使用BA优化，如果内点较少，则反投影候选关键帧的地图点 到当前帧 获取额外的匹配点
-     根据特征所属格子和金字塔层级重新建立候选匹配，选取最优匹配；
-     若这样依然不够，放弃该候选关键帧，若足够，则将通过反投影获取的额外地图点加入，再进行优化。
-5. 如果内点满足要求(>50)则成功重定位，将最新重定位的id更新：mnLastRelocFrameId = mCurrentFrame.mnId;　　否则返回false。
- */
-/**
- * @brief 更新LocalMap
- *
- * 局部地图包括： \n
- * - K1个关键帧、K2个临近关键帧和参考关键帧
- * - 由这些关键帧观测到的MapPoints
- */
+	/*
+	 * The process of relocation Relocalization is probably like this:
+	 * 1. Calculate the BoW map of the current frame;
+	 * 2. Find similar candidate keyframes in the keyframe database;
+	 * 3. Match the current frame and each candidate key frame through BoW. If the number of matches is more than 15, perform EPnP solution;
+	 * 4. Use BA optimization for the solution result. If there are few interior points, 
+	 *    back-project the map points of the candidate key frame to the current frame to obtain additional matching points, 
+	 *    re-establish candidate matching according to the grid and pyramid level to which the feature belongs, 
+	 *    and select the optimal matching; If this is still not enough, discard the candidate key frame, 
+	 *    if it is enough, add the additional map points obtained through back projection, and then optimize.
+	 * 5. If the interior point meets the requirements (>50), the relocation is successful, and the id of the latest relocation is updated: mnLastRelocFrameId = mCurrentFrame.mnId; otherwise, it returns false.
+	 */
+	/**
+	 * @brief update LocalMap
+	 *
+	 * Local maps include: \n
+	 * - K1 keyframes, K2 adjacent keyframes and reference keyframes
+	 * - MapPoints observed by these keyframes
+	 */
 	bool Tracking::Relocalization()
 	{
-  // 1. 计算当前帧的BoW映射； Compute Bag of Words Vector
-	    // 词典 N个M维的单词
-	    // 一帧的描述子  n个M维的描述子
-	    // 生成一个 N*1的向量 记录一帧的描述子 使用词典单词的情况
+  	    // 1. Calculate the BoW map of the current frame; Compute Bag of Words Vector
+	    // Dictionary N M-dimensional words
+	    // Descriptor of a frame n M-dimensional descriptors
+	    // Generate a N*1 vector Record the descriptor of a frame Use dictionary words
 	    mCurrentFrame.ComputeBoW();
 
 	    // Relocalization is performed when tracking is lost
 	    // Track Lost: Query KeyFrame Database for keyframe candidates for relocalisation
- // 2. 在关键帧数据库中找到相似的候选关键帧；
-           // 计算帧描述子 词典单词线性 表示的 词典单词向量
-           // 和 关键帧数据库中 每个关键帧的线性表示向量 求距离 距离最近的一些帧 为 候选关键帧  
+ 	    // 2. Find similar candidate key frames in the key frame database; calculate the dictionary word vector represented by the linear representation of the frame descriptor dictionary word and the linear representation vector of each key frame in the key frame database. 
+	    // Find some frames with the closest distance as candidate key frames
 	    vector<KeyFrame*> vpCandidateKFs = mpKeyFrameDB->DetectRelocalizationCandidates(&mCurrentFrame);
 	    if(vpCandidateKFs.empty())
 		return false;
-	    const int nKFs = vpCandidateKFs.size();// 总的候选关键帧
+	    const int nKFs = vpCandidateKFs.size();// total candidate keyframes
 
 	    // We perform first an ORB matching with each candidate
 	    // If enough matches are found we setup a PnP solver
-	    ORBmatcher matcher(0.75,true);// 描述子匹配器   最小距离 < 0.75*次短距离
-	    vector<PnPsolver*> vpPnPsolvers;//两关键帧之间的匹配点  Rt 求解器
-	    vpPnPsolvers.resize(nKFs);// 当前帧 和 每个候选关键帧 都有一个 求解器
+	    ORBmatcher matcher(0.75,true);// Descriptor Matcher Minimum Distance < 0.75*Short Distance
+	    vector<PnPsolver*> vpPnPsolvers;//Match point Rt solver between two keyframes
+	    vpPnPsolvers.resize(nKFs);// There is a solver for the current frame and each candidate keyframe
 	    vector<vector<MapPoint*> > vvpMapPointMatches;
-	    // 当前帧 的关键点描述子 和 每个候选关键帧地图点 描述子的匹配点
+	    // The keypoint descriptor of the current frame and the matching point of each candidate keyframe map point descriptor
 	    
-	    vvpMapPointMatches.resize(nKFs);//两个关键帧之间的 地图点匹配
-	    vector<bool> vbDiscarded;// 候选关键帧与当前帧匹配 好坏 标志
+	    vvpMapPointMatches.resize(nKFs);//map point match between two keyframes
+	    vector<bool> vbDiscarded;// The candidate keyframe matches the current frame Good or bad flag
 	    vbDiscarded.resize(nKFs);
 
 	    int nCandidates=0;
 
-	    for(int i=0; i<nKFs; i++)// 关键帧数据库中 每一个候选 关键帧
+	    for(int i=0; i<nKFs; i++)// Each candidate keyframe in the keyframe database
 	    {
 	      
-		KeyFrame* pKF = vpCandidateKFs[i];// 每一个候选 关键帧
+		KeyFrame* pKF = vpCandidateKFs[i];// each candidate keyframe
 		if(pKF->isBad())
-		    vbDiscarded[i] = true;//  坏
+		    vbDiscarded[i] = true;//  bad
 		
 		else
 		{
-// 3. 通过BoW匹配当前帧和每一个候选关键帧，如果匹配数足够 >15，进行EPnP求解；	  
+		    // 3. Match the current frame and each candidate key frame through BoW. If the number of matches is more than 15, perform EPnP solution;	  
 		    int nmatches = matcher.SearchByBoW(pKF,mCurrentFrame,vvpMapPointMatches[i]);
 		    if(nmatches<15)
 		    {
-			vbDiscarded[i] = true;// 匹配效果不好
+			vbDiscarded[i] = true;// bad match
 			continue;
 		    }
-		    else // 匹配数足够 >15   加入求解器
+		    else //enough matches >15 to join the solver
 		    {
-		      // 生成求解器
+		      // Generate solver
 			PnPsolver* pSolver = new PnPsolver(mCurrentFrame, vvpMapPointMatches[i]);
-			pSolver->SetRansacParameters(0.99,10,300,4,0.5,5.991);// 随机采样
-			vpPnPsolvers[i] = pSolver;// 添加求解器
+			pSolver->SetRansacParameters(0.99,10,300,4,0.5,5.991);// random sampling
+			vpPnPsolvers[i] = pSolver;// Add solver
 			nCandidates++;
 		    }
 		}
 	    }
 	    // Alternatively perform some iterations of P4P RANSAC
 	    // Until we found a camera pose supported by enough inliers
-      // 直到找到一个 候选匹配关键帧 和 符合 变换关系Rt 的足够的 内点数量
+      	    // until a candidate matching keyframe is found and a sufficient number of inliers conforming to the transformation relation Rt
 	    bool bMatch = false;
 	    ORBmatcher matcher2(0.9,true);
 
@@ -2039,66 +2038,66 @@ CreateNewKeyFrame()  两个函数来完成。
 	    {
 		for(int i=0; i<nKFs; i++)// 
 		{
-		    if(vbDiscarded[i])// 跳过匹配效果差的 候选关键帧
+		    if(vbDiscarded[i])// Skip candidate keyframes with poor matching performance
 			continue;
 
-		    // Perform 5 Ransac Iterations   5次 随机采样序列 求解位姿  Tcw 
-		    vector<bool> vbInliers;// 符合变换的 内点个数
+		    // Perform 5 Ransac Iterations 
+		    vector<bool> vbInliers;// The number of interior points that fit the transformation
 		    int nInliers;
 		    bool bNoMore;
-           //求解器求解 进行EPnP求解
+           	    //Solver Solver Perform EPnP Solver
 		    PnPsolver* pSolver = vpPnPsolvers[i];
-		    cv::Mat Tcw = pSolver->iterate(5,bNoMore,vbInliers,nInliers);//迭代5次 得到变换矩阵
+		    cv::Mat Tcw = pSolver->iterate(5,bNoMore,vbInliers,nInliers);//Iterate 5 times to get the transformation matrix
 
 		    // If Ransac reachs max. iterations discard keyframe
 		    if(bNoMore)//迭代5次效果还不好
 		    {
-			vbDiscarded[i]=true;// EPnP求解 不好   匹配效果差  放弃该  候选 关键帧
+			vbDiscarded[i]=true;// EPnP solution is not good, the matching effect is poor, and the candidate key frame is discarded
 			nCandidates--;
 		    }
-// 4. 对求解结果使用BA优化，如果内点较少，则反投影当前帧的地图点到候选关键帧获取额外的匹配点；
-// 若这样依然不够，放弃该候选关键帧，若足够，则将通过反投影获取的额外地图点加入，再进行优化。
+		    // 4. Use BA optimization for the solution results. If there are few interior points, back-project the map points of the current frame to the candidate key frames to obtain additional matching points;
+		    // If this is still not enough, discard the candidate key frame, if it is enough, add the additional map points obtained through back projection, and then optimize.
 		    // If a Camera Pose is computed, optimize
 		    if(!Tcw.empty())
 		    {
 			Tcw.copyTo(mCurrentFrame.mTcw);
 
-			set<MapPoint*> sFound;// 地图点
+			set<MapPoint*> sFound;// map point
 
-			const int np = vbInliers.size();// 符合 位姿  Tcw  的 内点数量
+			const int np = vbInliers.size();// number of interior points that conform to pose Tcw
 
 			for(int j=0; j<np; j++)
 			{
-			    if(vbInliers[j])// 每一个符和的 内点
+			    if(vbInliers[j])// interior point of each sign
 			    {
-				mCurrentFrame.mvpMapPoints[j]=vvpMapPointMatches[i][j];// 对应的地图点 i帧  j帧下的地图点
+				mCurrentFrame.mvpMapPoints[j]=vvpMapPointMatches[i][j];// Corresponding map point i frame map point under j frame
 				sFound.insert(vvpMapPointMatches[i][j]);
 			    }
 			    else
 				mCurrentFrame.mvpMapPoints[j]=NULL;
 			}
-		      // 使用BA优化   位姿  返回优化较好效果较好的  3d-2d优化边
+		      // Use BA to optimize the pose and return the 3d-2d optimized edges with better optimization results
 			int nGood = Optimizer::PoseOptimization(&mCurrentFrame);
 
 			if(nGood<10)
-			    continue;// 这一候选帧 匹配优化后效果不好
+			    continue;// This candidate frame is not good after matching optimization
 
 			for(int io =0; io<mCurrentFrame.N; io++)
-			    if(mCurrentFrame.mvbOutlier[io])// 优化后更新状态 外点
-				mCurrentFrame.mvpMapPoints[io]=static_cast<MapPoint*>(NULL);// 地图点为空指针
+			    if(mCurrentFrame.mvbOutlier[io])// Update state after optimization
+				mCurrentFrame.mvpMapPoints[io]=static_cast<MapPoint*>(NULL);// The map point is a null pointer
 
-      // If few inliers, search by projection in a coarse window and optimize again
-      // 如果内点较少，则反投影候选关键帧的地图点vpCandidateKFs[i] 到 当前帧像素坐标系下
-      //  根据格子和金字塔层级信息 在 当前帧下 选择与地图点匹配的特征点
-      // 获取额外的匹配点
+     			 // If few inliers, search by projection in a coarse window and optimize again
+      			// If there are fewer interior points, backproject the map point vpCandidateKFs[i] of the candidate key frame to the pixel coordinate system of the current frame
+      			// According to the grid and pyramid level information, select the feature point that matches the map point under the current frame
+      			// Get extra match points
 			if(nGood<50)
 			{
 			    int nadditional =matcher2.SearchByProjection(mCurrentFrame,vpCandidateKFs[i],sFound,10,100);
 
 			    if(nadditional+nGood>=50)
 			    {
-			      // 当前帧 特征点对应的 地图点 数大于50 进行优化
-				nGood = Optimizer::PoseOptimization(&mCurrentFrame);// 返回内点数量
+			      // The number of map points corresponding to the feature points of the current frame is greater than 50 for optimization
+				nGood = Optimizer::PoseOptimization(&mCurrentFrame);// Returns the number of interior points
 
 				// If many inliers but still not enough, search by projection again in a narrower window
 				// the camera has been already optimized with many points
@@ -2108,7 +2107,7 @@ CreateNewKeyFrame()  两个函数来完成。
 				    for(int ip =0; ip<mCurrentFrame.N; ip++)
 					if(mCurrentFrame.mvpMapPoints[ip])
 					    sFound.insert(mCurrentFrame.mvpMapPoints[ip]);
-				   // 缩小搜索窗口
+				   // Narrow the search window
 				    nadditional =matcher2.SearchByProjection(mCurrentFrame,vpCandidateKFs[i],sFound,3,64);
 
 				    // Final optimization
@@ -2117,8 +2116,8 @@ CreateNewKeyFrame()  两个函数来完成。
 					nGood = Optimizer::PoseOptimization(&mCurrentFrame);
 
 					for(int io =0; io<mCurrentFrame.N; io++)
-					    if(mCurrentFrame.mvbOutlier[io])//外点
-						mCurrentFrame.mvpMapPoints[io]=NULL;// 空指针
+					    if(mCurrentFrame.mvbOutlier[io])//Outer point
+						mCurrentFrame.mvpMapPoints[io]=NULL;// null pointer
 				    }
 				}
 			    }
@@ -2141,17 +2140,17 @@ CreateNewKeyFrame()  两个函数来完成。
 	    }
 	    else
 	    {
-		mnLastRelocFrameId = mCurrentFrame.mnId;// 重定位 帧ID
+		mnLastRelocFrameId = mCurrentFrame.mnId;// Relocation Frame ID
 		return true;
 	    }
 
 	}
 
-// 跟踪重置
+	// Track reset
 	void Tracking::Reset()
 	{
 
-	    cout << "系统重置 System Reseting" << endl;
+	    cout << "System Reseting" << endl;
 	    if(mpViewer)
 	    {
 		mpViewer->RequestStop();
@@ -2160,17 +2159,17 @@ CreateNewKeyFrame()  两个函数来完成。
 	    }
 
 	    // Reset Local Mapping
-	    cout << "重置局部建图 Reseting Local Mapper...";
+	    cout << "Reseting Local Mapper...";
 	    mpLocalMapper->RequestReset();
 	    cout << " done" << endl;
 
 	    // Reset Loop Closing
-	    cout << "重置回环检测 Reseting Loop Closing...";
+	    cout << "Reseting Loop Closing...";
 	    mpLoopClosing->RequestReset();
 	    cout << " done" << endl;
 
 	    // Clear BoW Database
-	    cout << "重置数据库 Reseting Database...";
+	    cout << "Reseting Database...";
 	    mpKeyFrameDB->clear();
 	    cout << " done" << endl;
 
@@ -2196,10 +2195,10 @@ CreateNewKeyFrame()  两个函数来完成。
 		mpViewer->Release();
 	}
 
-// 重新读取 配置文件
-// 相机内参数
-// 畸变校正参数
-// 基线长度 × 焦距
+	// reread configuration file
+	// In-camera parameters
+	// Distortion Correction Parameters
+	// Baseline length × focal length
 	void Tracking::ChangeCalibration(const string &strSettingPath)
 	{
 	    cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
@@ -2233,7 +2232,7 @@ CreateNewKeyFrame()  两个函数来完成。
 	    Frame::mbInitialComputations = true;
 	}
 	
-// 跟踪 + 建图 模式
+	// Track + Mapping Mode
 	void Tracking::InformOnlyTracking(const bool &flag)
 	{
 	    mbOnlyTracking = flag;
