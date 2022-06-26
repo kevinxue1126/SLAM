@@ -1,7 +1,7 @@
 /**
 * This file is part of ORB-SLAM2.
-* 图漾 rgbd orbslam2 示例
-* 运行 ： ./ty_rgbd ../../Vocabulary/ORBvoc.bin ./my_rgbd_ty_api_adj.yaml
+* Tuyang rgbd orbslam2 example
+* Run ： ./ty_rgbd ../../Vocabulary/ORBvoc.bin ./my_rgbd_ty_api_adj.yaml
 */
 
 
@@ -15,62 +15,62 @@
 #include<System.h>
 
 
-#include "./ty/common/common.hpp" // 图漾的头文件
+#include "./ty/common/common.hpp" // Tuyang's header file
 
 using namespace std;
 
-// 1. 参数初始化===============================
-static char buffer[1024 * 1024 * 20];// 存储 sdk 版本等信息
-static int  n;// usb设备号
+// 1. parameter initialization
+static char buffer[1024 * 1024 * 20];// Store sdk version and other information
+static int  n;// usb device number
 static volatile bool exit_main;
 
 static int fps_counter = 0;
 static clock_t fps_tm = 0;
-const char* IP = NULL; // 指向只读字符的 指针IP 网络设备IP地址
-TY_DEV_HANDLE hDevice; // 设备 handle
-//int32_t color = 1, ir = 0, depth = 1; // rgb图像 ir红外图像  depth深度图像
-//int i = 1; // 捕获图片index
+const char* IP = NULL; // pointer to read-only characters IP, network device IP address
+TY_DEV_HANDLE hDevice; // device handle
+//int32_t color = 1, ir = 0, depth = 1; // rgb image ir infrared image depth depth image
+//int i = 1; // capture image index
 
 char img_color_file_name[15]; 
 
-char* frameBuffer[2]; // 帧 缓冲区
+char* frameBuffer[2]; // frame buffer
 
-double slam_sys_time=0.0, ttrack=0; // 时间戳
+double slam_sys_time=0.0, ttrack=0; // timestamp
 
 // ORB_SLAM2::System SLAM();
 
 int capture_ok_flag = 0;
 
-cv::Mat color_img, depth_img;// 彩色图 和 灰度图=====
-cv::Mat  undistort_result;   // 彩色矫正图
-cv::Mat newDepth;            // 配置后的深度图
+cv::Mat color_img, depth_img;// Color and Grayscale
+cv::Mat  undistort_result;   // Color Correction Chart
+cv::Mat newDepth;            // Configured depth map
 
-// 回调函数数据 结构体===================
+// Callback function data structure
 struct CallbackData {
     int             index;
     TY_DEV_HANDLE   hDevice;
     DepthRender*    render;
-    TY_CAMERA_DISTORTION color_dist;// 畸变参数
-    TY_CAMERA_INTRINSIC color_intri;// 内参数
+    TY_CAMERA_DISTORTION color_dist;// distortion parameter
+    TY_CAMERA_INTRINSIC color_intri;// intrinsic parameters
 };
-CallbackData cb_data;     // 回调函数数据=====
+CallbackData cb_data;     // callback function data
 
-int get_fps(); // 帧数/s
-void eventCallback(TY_EVENT_INFO *event_info, void *userdata);// 事件回调函数
-void frameHandler(TY_FRAME_DATA* frame, void* userdata, ORB_SLAM2::System & SLAM2);// 帧回调函数
-void frameHandler(TY_FRAME_DATA* frame, void* userdata);// 帧回调函数
-int ty_RGBD_init(void); // 图漾相机初始化
+int get_fps(); // frames /s
+void eventCallback(TY_EVENT_INFO *event_info, void *userdata);// event callback function
+void frameHandler(TY_FRAME_DATA* frame, void* userdata, ORB_SLAM2::System & SLAM2);// frame callback function
+void frameHandler(TY_FRAME_DATA* frame, void* userdata);// frame callback function
+int ty_RGBD_init(void); // image camera initialization
 
 int main(int argc, char **argv)
 {
-// 1. 检测命令行输入
+// 1. detect command line input
     if(argc != 3)
     {
         cerr << endl << "Usage: ./my_rgbd path_to_vocabulary path_to_settings" << endl;
         return 1;
     }
 
-// 2. 图漾相机初始化================================
+// 2. image camera initialization
     int init_flag = ty_RGBD_init();
     if(init_flag == -1) 
     {
@@ -79,7 +79,7 @@ int main(int argc, char **argv)
     }
 
 
-// 3. 创建双目系统 ORB_SLAM2::System======================================
+// 3. create a binocular system ORB_SLAM2::System
     ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::RGBD,true);
    //SLAM(argv[1],argv[2],ORB_SLAM2::System::RGBD,true);
 
@@ -87,30 +87,30 @@ int main(int argc, char **argv)
     cout << endl << "-------" << endl;
     cout << "Start processing ..." << endl;
     
-// 7. 启动采集==============================
+// 4. start acquisition
     LOGD("=== Start capture");
     ASSERT_OK( TYStartCapture(hDevice) );
 
 
-// 7.5 获取相机参数=======
+// 4.5 get camera parameters
     LOGD("=== Read color rectify matrix");
     {
-        TY_CAMERA_DISTORTION color_dist;// 相机 畸变参数
-        TY_CAMERA_INTRINSIC color_intri;// 相机 内参数
+        TY_CAMERA_DISTORTION color_dist;// Camera Distortion Parameters
+        TY_CAMERA_INTRINSIC color_intri;// Camera internal parameters
         TY_STATUS ret = TYGetStruct(hDevice, TY_COMPONENT_RGB_CAM, 
                                     TY_STRUCT_CAM_DISTORTION, &color_dist, sizeof(color_dist));
         ret |= TYGetStruct(hDevice, TY_COMPONENT_RGB_CAM, 
                            TY_STRUCT_CAM_INTRINSIC, &color_intri, sizeof(color_intri));
         if (ret == TY_STATUS_OK)
         {
-            cb_data.color_intri = color_intri;// 相机 内参数
-            cb_data.color_dist= color_dist;   // 相机 畸变参数
+            cb_data.color_intri = color_intri;// Camera internal parameters
+            cb_data.color_dist= color_dist;   // Camera Distortion Parameters
         }
         else
         { //reading data from device failed .set some default values....
             memset(cb_data.color_dist.data, 0, 12 * sizeof(float));
             // 畸变参数 k1,k2,p1,p2,k3,k4,k5,k6,s1,s2,s3,s4
-            memset(cb_data.color_intri.data, 0, 9 * sizeof(float));// 内参数
+            memset(cb_data.color_intri.data, 0, 9 * sizeof(float));// intrinsic parameters
             cb_data.color_intri.data[0] = 1000.f;// fx
             cb_data.color_intri.data[4] = 1000.f;// fy
             cb_data.color_intri.data[2] = 600.f;// cx
@@ -121,18 +121,18 @@ int main(int argc, char **argv)
 
     LOGD("=== While loop to fetch frame");
     exit_main = false;
-    TY_FRAME_DATA frame; // 每一帧数据
+    TY_FRAME_DATA frame; // data for each frame
     
     while(!exit_main) 
     {
-// 8. 主动获取帧数据(主动获取模式下不调用)===========
-        int err = TYFetchFrame(hDevice, &frame, -1);// 获取一帧数据
+// 5. active acquisition of frame data (not called in active acquisition mode)
+        int err = TYFetchFrame(hDevice, &frame, -1);// get a frame of data
         if( err != TY_STATUS_OK ) 
         {
             LOGD("... Drop one frame");
         } 
         else 
-        { // 处理获取到的帧数据============
+        { // process the acquired frame data
             //frameHandler(&frame, &cb_data, SLAM);
               frameHandler(&frame, &cb_data);
         }
@@ -140,7 +140,7 @@ int main(int argc, char **argv)
         if(capture_ok_flag){
                 // LOGD("... tracking ... ");
 		capture_ok_flag = 0;
-	    // 7. 记录时间戳 tframe ，并计时==========================================
+	    // 6. Record the timestamp tframe and time it
 	#ifdef COMPILEDWITHC11
 		std::chrono::steady_clock::time_point    t1 = std::chrono::steady_clock::now();
 	#else
@@ -148,10 +148,10 @@ int main(int argc, char **argv)
 	#endif	
 		slam_sys_time += ttrack ;
 
-	// 8. 把左右图像和时间戳 传给 SLAM系统====================================
+	// 7. Pass the left and right images and timestamps to the SLAM system
 		SLAM.TrackRGBD(color_img, depth_img, slam_sys_time);
 
-	// 9. 计时结束，计算时间差，处理时间======================================	
+	// 8. Timing is over, time difference is calculated, processing time
 	#ifdef COMPILEDWITHC11
 		std::chrono::steady_clock::time_point        t2 = std::chrono::steady_clock::now();
 	#else
@@ -165,25 +165,25 @@ int main(int argc, char **argv)
 	
     }
 
-// 10. 结束，关闭slam系统，关闭所有线程===================================
+// 9. end, close the slam system, close all threads
     // Stop all threads
     SLAM.Shutdown();
 
-// 9. 设备停止采集=================
+// 10. Device stops collecting
     ASSERT_OK( TYStopCapture(hDevice) );
-// 10. 关闭设备=================
+// 11. Turn off the device
     ASSERT_OK( TYCloseDevice(hDevice) );
-// 11. 释放 API=================
+// 12. release API
     ASSERT_OK( TYDeinitLib() );
     // MSLEEP(10); // sleep to ensure buffer is not used any more
 
-// 12. 释放内存空间==============
+// 13. Free up memory space
     delete frameBuffer[0];
     delete frameBuffer[1];
 
     LOGD("=== Main done!");
 
-// 11. 保存相机轨迹======================================================
+// 14. 保存相机轨迹Save camera track
     // Save camera trajectory
     SLAM.SaveTrajectoryTUM("my_ty_rgbd_CameraTrajectory.txt");
     //SLAM.SaveKeyFrameTrajectoryTUM("my_ty_rgbd_KeyFrameTrajectory.txt");   
@@ -193,10 +193,10 @@ int main(int argc, char **argv)
 
 
 //================================================
-//=== 计算帧数 fps
+//=== Calculate the number of frames fps
 //================================================
 #ifdef _WIN32
-// 帧数===================
+// frame number===================
 int get_fps() {
    const int kMaxCounter = 250;
    fps_counter++;
@@ -233,7 +233,7 @@ int get_fps() {
 
 
 //=========================================================
-//=== 处理相机帧的 回调函数
+//=== Callback function for processing camera frame
 //=========================================================
 void frameHandler(TY_FRAME_DATA* frame, void* userdata, ORB_SLAM2::System & SLAM2) {
     CallbackData* pData = (CallbackData*) userdata;
@@ -250,16 +250,16 @@ void frameHandler(TY_FRAME_DATA* frame, void* userdata, ORB_SLAM2::System & SLAM
 
     //if(!depth.empty()){
     //    cv::Mat colorDepth = pData->render->Compute(depth);
-    //    cv::imshow("ColorDepth", colorDepth);// 彩色深度图
+    //    cv::imshow("ColorDepth", colorDepth);
     //}
     //if(!irl.empty()){ cv::imshow("LeftIR", irl); }
     //if(!irr.empty()){ cv::imshow("RightIR", irr); }
-    // cv::namedWindow("Color", CV_WINDOW_NORMAL);//CV_WINDOW_NORMAL就是0
+    // cv::namedWindow("Color", CV_WINDOW_NORMAL);
     //if(!color.empty()){ cv::imshow("Color", color); }
 
 if((!depth_img.empty()) && (!color_img.empty()))
 {
-    // 7. 记录时间戳 tframe ，并计时==========================================
+    // 15. Record the timestamp tframe and time it
 #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point    t1 = std::chrono::steady_clock::now();
 #else
@@ -267,10 +267,10 @@ if((!depth_img.empty()) && (!color_img.empty()))
 #endif	
         slam_sys_time += ttrack ;
 
-// 8. 把左右图像和时间戳 传给 SLAM系统====================================
+// 16. Pass the left and right images and timestamps to the SLAM system
         SLAM2.TrackStereo(color_img, depth_img, slam_sys_time);
 
-// 9. 计时结束，计算时间差，处理时间======================================	
+// 17. Timing is over, time difference is calculated, processing time
 #ifdef COMPILEDWITHC11
         std::chrono::steady_clock::time_point        t2 = std::chrono::steady_clock::now();
 #else
@@ -297,7 +297,7 @@ if((!depth_img.empty()) && (!color_img.empty()))
 }
 
 //=========================================================
-//=== 处理相机帧的 回调函数
+//=== Callback function for processing camera frame
 //=========================================================
 void frameHandler(TY_FRAME_DATA* frame, void* userdata) {
     CallbackData* pData = (CallbackData*) userdata;
@@ -313,26 +313,26 @@ void frameHandler(TY_FRAME_DATA* frame, void* userdata) {
 
     //if(!depth_img.empty()){
     //    cv::Mat colorDepth = pData->render->Compute(depth_img);
-    //    cv::imshow("ColorDepth", colorDepth);// 彩色深度图
+    //    cv::imshow("ColorDepth", colorDepth);
     //}
     //if(!irl.empty()){ cv::imshow("LeftIR", irl); }
     //if(!irr.empty()){ cv::imshow("RightIR", irr); }
-    // cv::namedWindow("Color", CV_WINDOW_NORMAL);//CV_WINDOW_NORMAL就是0
+    // cv::namedWindow("Color", CV_WINDOW_NORMAL);
     // if(!color_img.empty()){ cv::imshow("Color", color_img); }
 
-    // 矫正彩色图像=======
+    // Straighten color images
     if(!color_img.empty())
     {
-        //cv::Mat undistort_result(color_img.size(), CV_8UC3);// 矫正结果
-        undistort_result = cv::Mat(color_img.size(), CV_8UC3);// 矫正结果
-        TY_IMAGE_DATA dst;        // 目标图像
-        dst.width = color_img.cols;   // 宽度 列数
-        dst.height = color_img.rows;  // 高度 行数
-        dst.size = undistort_result.size().area() * 3;// 3通道 
+        //cv::Mat undistort_result(color_img.size(), CV_8UC3);// Correction results
+        undistort_result = cv::Mat(color_img.size(), CV_8UC3);// Correction results
+        TY_IMAGE_DATA dst;        // target image
+        dst.width = color_img.cols;   // width number of columns
+        dst.height = color_img.rows;  // height row
+        dst.size = undistort_result.size().area() * 3;// 3 channels
         dst.buffer = undistort_result.data;
-        dst.pixelFormat = TY_PIXEL_FORMAT_RGB; // RGB 格式
+        dst.pixelFormat = TY_PIXEL_FORMAT_RGB; //RGB format
 
-        TY_IMAGE_DATA src;        // 源图像=================
+        TY_IMAGE_DATA src;        // source image
         src.width = color_img.cols;
         src.height = color_img.rows;
         src.size = color_img.size().area() * 3;
@@ -342,16 +342,16 @@ void frameHandler(TY_FRAME_DATA* frame, void* userdata) {
         //TYUndistortImage accept TY_IMAGE_DATA from TY_FRAME_DATA , pixel format RGB888 or MONO8
         //you can also use opencv API cv::undistort to do this job.
         ASSERT_OK(TYUndistortImage(&pData->color_intri, &pData->color_dist, NULL, &src, &dst));
-        color_img = undistort_result;// 畸变矫正后的图像=== 可能需要 深拷贝 !!!!!!!!!!==也定义成全局变量===
+        color_img = undistort_result;
 
-       // cv::Mat resizedColor;// 彩色图缩放到 和 深度图一样大, 本身设定就是一样大的
+       // cv::Mat resizedColor;
        // cv::resize(color, resizedColor, depth.size(), 0, 0, CV_INTER_LINEAR);
        // cv::imshow("color", resizedColor);
     }
 
-// 彩色图和深度图配准========3d点云反投影到图像上，获取对应像素点的深度值=====
+
     // do Registration
-    // cv::Mat newDepth; // 定义成全局变量======
+    // cv::Mat newDepth; 
     if(!point3D.empty() && !color_img.empty()) 
     {
         ASSERT_OK( TYRegisterWorldToColor2(pData->hDevice, (TY_VECT_3F*)point3D.data, 0, 
@@ -361,22 +361,22 @@ void frameHandler(TY_FRAME_DATA* frame, void* userdata) {
         cv::Mat resized_color;
         cv::Mat temp;
         //you may want to use median filter to fill holes in projected depth image or do something else here
-        cv::medianBlur(newDepth,temp,5);// 对3d点云反投影到 彩色图上 获取的带有 孔洞的 深度图 进行均值滤波======
+        cv::medianBlur(newDepth,temp,5);
         newDepth = temp;
         //resize to the same size for display
-        // cv::resize(newDepth, newDepth, depth_src.size(), 0, 0, 0);// 深度图  0 填充
-        // cv::resize(color, resized_color, depth_src.size());// 彩色图
+        // cv::resize(newDepth, newDepth, depth_src.size(), 0, 0, 0);
+        // cv::resize(color, resized_color, depth_src.size());
 
-       // cv::Mat depthColor = pData->render->Compute(newDepth);// 彩色深度图
-       // cv::imshow("Registrated ColorDepth", depthColor);// 显示 
+       // cv::Mat depthColor = pData->render->Compute(newDepth);
+       // cv::imshow("Registrated ColorDepth", depthColor);
 
-       // depthColor = depthColor / 2 + resized_color / 2; // c彩色深度图 和 彩色图合并在一起
-       // cv::imshow("projected depth", depthColor);// 显示 
+       // depthColor = depthColor / 2 + resized_color / 2; 
+       // cv::imshow("projected depth", depthColor);
     } 
 
     if((!depth_img.empty()) && (!color_img.empty()) && (!point3D.empty()))
     {
-	capture_ok_flag = 1;// 采集成功  ？？？
+	capture_ok_flag = 1;
     }
 
     int key = cv::waitKey(1);
@@ -395,7 +395,7 @@ void frameHandler(TY_FRAME_DATA* frame, void* userdata) {
 }
 
 //==================================================
-//====事件 回调函数
+//====event callback function
 //==================================================
 void eventCallback(TY_EVENT_INFO *event_info, void *userdata)
 {
@@ -411,28 +411,28 @@ void eventCallback(TY_EVENT_INFO *event_info, void *userdata)
 
 
 //===================================================
-//======图漾相机初始化
+//======Image camera initialization
 //===================================================
 int ty_RGBD_init(void)
 {
     //cv::namedWindow("Color", CV_WINDOW_NORMAL);//CV_WINDOW_NORMAL就是0
-// 1. 初始化 API ==============
+//1. Initialize the API
     LOGD("=== Init lib");
     ASSERT_OK( TYInitLib() );
     TY_VERSION_INFO* pVer = (TY_VERSION_INFO*)buffer;
-    ASSERT_OK( TYLibVersion(pVer) );// 获取sdk 软件版本信息========
+    ASSERT_OK( TYLibVersion(pVer) );// Get sdk software version information========
     LOGD("     - lib version: %d.%d.%d", pVer->major, pVer->minor, pVer->patch);
 
-// 2. 打开设备=================
-    if(IP) // 打开网络设备
+// 2. Turn on the device
+    if(IP) // Turn on the network device
     {
         LOGD("=== Open device %s", IP);
         ASSERT_OK( TYOpenDeviceWithIP(IP, &hDevice) );
     } 
-    else   // 打开 USB设备
+    else   // Turn on the USB device
     {
         LOGD("=== Get device info");
-        ASSERT_OK( TYGetDeviceNumber(&n) );// 获取设备号
+        ASSERT_OK( TYGetDeviceNumber(&n) );// Get device number
         LOGD("     - device number %d", n);
 
         TY_DEVICE_BASE_INFO* pBaseInfo = (TY_DEVICE_BASE_INFO*)buffer;
@@ -447,12 +447,12 @@ int ty_RGBD_init(void)
         ASSERT_OK( TYOpenDevice(pBaseInfo[0].id, &hDevice) );
     }
 
-// 3. 操作组件===================
+// 3. Operating components
     int32_t allComps;
-    ASSERT_OK( TYGetComponentIDs(hDevice, &allComps) );// 查询组件状态
-    // TYGetEnabledComponents(hDevice, &allComps) 查询使能状态的组件
+    ASSERT_OK( TYGetComponentIDs(hDevice, &allComps) );//Query component status
+    // TYGetEnabledComponents(hDevice, &allComps) 
     if(allComps & TY_COMPONENT_RGB_CAM) 
-    { // 使能 RGB 组件功能==
+    { // Enable RGB component function
         LOGD("=== Has RGB camera, open RGB cam");
         ASSERT_OK( TYEnableComponents(hDevice, TY_COMPONENT_RGB_CAM) );
     }
@@ -461,12 +461,12 @@ int ty_RGBD_init(void)
     int32_t componentIDs = 0;
     LOGD("=== Configure components, open depth cam");
     if (depth) 
-    {// 深度图像
+    {// 
         componentIDs = TY_COMPONENT_DEPTH_CAM;
     }
 
     if (ir) 
-    {// 红外图像
+    {// 
         componentIDs |= TY_COMPONENT_IR_CAM_LEFT;
     }
 
@@ -476,12 +476,12 @@ int ty_RGBD_init(void)
     }
 */
     LOGD("=== Configure components");
-    int32_t componentIDs = TY_COMPONENT_POINT3D_CAM | TY_COMPONENT_RGB_CAM;// 开启3d点云组件+RGB组件，相当于开启了所有
+    int32_t componentIDs = TY_COMPONENT_POINT3D_CAM | TY_COMPONENT_RGB_CAM;// Turning on the 3d point cloud component + RGB component is equivalent to turning on all
     ASSERT_OK( TYEnableComponents(hDevice, componentIDs) );
     
 
 
-// 4. 配置参数 feature 分辨率等 =========================
+// 4. Configuration parameters feature resolution, etc.
     LOGD("=== Configure feature, set resolution to 640x480.");
     LOGD("Note: DM460 resolution feature is in component TY_COMPONENT_DEVICE,");
     LOGD("      other device may lays in some other components.");
@@ -490,7 +490,7 @@ int ty_RGBD_init(void)
     TY_STATUS ty_status = TYGetFeatureInfo(hDevice, TY_COMPONENT_DEPTH_CAM, TY_ENUM_IMAGE_MODE, &info);
     if ((info.accessMode & TY_ACCESS_WRITABLE) && (ty_status == TY_STATUS_OK)) 
     { 
-      // 设置分辨率 深度图======
+      // Set the resolution depth map
       int err = TYSetEnum(hDevice,            TY_COMPONENT_DEPTH_CAM, 
                           TY_ENUM_IMAGE_MODE, TY_IMAGE_MODE_640x480);
         ASSERT(err == TY_STATUS_OK || err == TY_STATUS_NOT_PERMITTED);   
@@ -499,24 +499,24 @@ int ty_RGBD_init(void)
     ty_status = TYGetFeatureInfo(hDevice, TY_COMPONENT_RGB_CAM, TY_ENUM_IMAGE_MODE, &info);
     if ((info.accessMode & TY_ACCESS_WRITABLE) && (ty_status == TY_STATUS_OK)) 
     { 
-      // 设置分辨率 彩色图======
+      // Set Resolution Colormap
       int err = TYSetEnum(hDevice,            TY_COMPONENT_RGB_CAM, 
                           TY_ENUM_IMAGE_MODE, TY_IMAGE_MODE_640x480);
         ASSERT(err == TY_STATUS_OK || err == TY_STATUS_NOT_PERMITTED);   
     }
 
-// 5. 分配内存空间
+// 5. Allocate memory space
     LOGD("=== Prepare image buffer");
     
-    // 查询当前配置下每个 framebuffer 的大小
+    // Query the size of each framebuffer under the current configuration
     int32_t frameSize;
-    //frameSize = 1280 * 960 * (3 + 2 + 2);// 彩色图 默认为 1280*960
-    // 若配置为 640*480 则: frameSize = 640 * 480 * (3 + 2 + 2)
+    //frameSize = 1280 * 960 * (3 + 2 + 2);
+    // If configured as 640*480 then: frameSize = 640 * 480 * (3 + 2 + 2)
     ASSERT_OK( TYGetFrameBufferSize(hDevice, &frameSize) );
     LOGD("     - Get size of framebuffer, %d", frameSize);
     // ASSERT( frameSize >= 640 * 480 * 2 );
     
-    // 分配 framebuffer 并压入驱动内的缓冲队列
+    // Allocate framebuffer and push into buffer queue in driver
     LOGD("     - Allocate & enqueue buffers");
     // char* frameBuffer[2];
     frameBuffer[0] = new char[frameSize];
@@ -526,7 +526,7 @@ int ty_RGBD_init(void)
     LOGD("     - Enqueue buffer (%p, %d)", frameBuffer[1], frameSize);
     ASSERT_OK( TYEnqueueBuffer(hDevice, frameBuffer[1], frameSize) );
 
-// 6. 注册回调函数(主动获取模式下不调用)。
+// 6. Register the callback function (not called in active acquisition mode).
     LOGD("=== Register callback");
     LOGD("Note: Callback may block internal data receiving,");
     LOGD("      so that user should not do long time work in callback.");
@@ -544,7 +544,7 @@ int ty_RGBD_init(void)
     LOGD("      so that user should not do long time work in callback.");
     ASSERT_OK(TYRegisterEventCallback(hDevice, eventCallback, NULL));
     
-    // 取消 主动发送数据模式
+    // Cancel Active send data mode
     LOGD("=== Disable trigger mode");
     ty_status = TYGetFeatureInfo(hDevice, TY_COMPONENT_DEVICE, TY_BOOL_TRIGGER_MODE, &info);
     if ((info.accessMode & TY_ACCESS_WRITABLE) && (ty_status == TY_STATUS_OK)) {
