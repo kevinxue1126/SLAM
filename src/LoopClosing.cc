@@ -232,20 +232,15 @@ namespace ORB_SLAM2
 		      {
 			  mvpEnoughConsistentCandidates.push_back(pCandidateKF);// Closed-loop candidate frame
 			  bEnoughConsistent=true; //this avoid to insert the same candidate more than once
-		      }
-		      
-///////////////////////////////-----------------------///////////////////////////////////////////////////////////////////////////////		      
-		       break;//这里只是结束 步骤5.3 的for循环// 添加
-		      // 好像找到一个就返回 ture  这是是不是 缺少一个 break; 
-		      // 提前结束 不知道 mvpEnoughConsistentCandidates 在其他地方还有没有用到
-		      // 在 ComputeSim3() 中会用到 mvpEnoughConsistentCandidates
+		      }      
+		      break;
 		  }
 	      }
 
-	      // If the group is not consistent with any previous group insert with consistency counter set to zero
-// 步骤6： 如果该“ 子候选组 ” 的所有关键帧都不存在于“ 子连续组 ”，那么 vCurrentConsistentGroups 将为空，
-          // 于是就把“ 子候选组 ”全部拷贝到 vCurrentConsistentGroups，并最终用于更新 mvConsistentGroups，
-          // 计数器设为0，重新开始
+	       // If the group is not consistent with any previous group insert with consistency counter set to zero
+	       // Step 6: If all the key frames of the "sub-candidate group" do not exist in the "sub-consistent group", 
+	       // then vCurrentConsistentGroups will be empty, so all the "sub-candidate groups" are copied to vCurrentConsistentGroups, 
+	       // and finally used to update mvConsistentGroups, The counter is set to 0 and starts over
 	      if(!bConsistentForSomeGroup)
 	      {
 		  ConsistentGroup cg = make_pair(spCandidateGroup,0);
@@ -254,11 +249,11 @@ namespace ORB_SLAM2
 	  }
 
 	  // Update Covisibility Consistent Groups
-// 步骤7：更新连续组	  
+	  // Step 7: Update Continuous Groups 
 	  mvConsistentGroups = vCurrentConsistentGroups;
 	  // Add Current Keyframe to database
 	  
-// 步骤8：添加当前关键帧 到关键帧数据库	  
+	  // Step 8: Add the current keyframe to the keyframe database	  
 	  mpKeyFrameDB->add(mpCurrentKF);
 
 	  if(mvpEnoughConsistentCandidates.empty())
@@ -277,117 +272,116 @@ namespace ORB_SLAM2
       
 
 /**
- * @brief 计算当前帧与闭环帧的Sim3变换等
+ * @brief Calculate the Sim3 transform of the current frame and the closed-loop frame, etc.
  *
- * 1. 通过Bow加速描述子的匹配，利用RANSAC粗略地计算出当前帧与闭环帧的Sim3（当前帧---闭环帧）
- * 2. 根据估计的Sim3，对3D点进行投影找到更多匹配，通过优化的方法计算更精确的Sim3（当前帧---闭环帧）
- * 3. 将闭环帧以及闭环帧相连的关键帧的MapPoints与当前帧的点进行匹配（当前帧---闭环帧+相连关键帧）
+ * 1. Accelerate the matching of descriptors through Bow, and use RANSAC to roughly calculate the Sim3 of the current frame and the closed-loop frame (current frame---closed-loop frame)
+ * 2. According to the estimated Sim3, project the 3D points to find more matches, and calculate the more accurate Sim3 by the optimized method (current frame---closed loop frame)
+ * 3. Match the MapPoints of the closed-loop frame and the keyframes connected to the closed-loop frame with the points of the current frame (current frame---closed-loop frame + connected keyframe)
  * 
- * 注意以上匹配的结果均都存在成员变量 mvpCurrentMatchedPoints 中，
- * 实际的更新步骤见CorrectLoop()步骤3：Start Loop Fusion
+ * Note that the above matching results are all stored in the member variable mvpCurrentMatchedPoints. 
+ * For the actual update steps, see CorrectLoop() Step 3: Start Loop Fusion
  * 
- * 步骤1：遍历每一个闭环候选关键帧  构造 sim3 求解器
- * 步骤2：从筛选的闭环候选帧中取出一帧关键帧pKF
- * 步骤3：将当前帧mpCurrentKF与闭环候选关键帧pKF匹配 得到匹配点对
- *    步骤3.1 跳过匹配点对数少的 候选闭环帧
- *    步骤3.2：  根据匹配点对 构造Sim3求解器
- * 步骤4：迭代每一个候选闭环关键帧  Sim3利用 相似变换求解器求解 候选闭环关键帧到档期帧的 相似变换
- * 步骤5：通过步骤4求取的Sim3变换，使用sim3变换匹配得到更多的匹配点 弥补步骤3中的漏匹配
- * 步骤6：G2O Sim3优化，只要有一个候选帧通过Sim3的求解与优化，就跳出停止对其它候选帧的判断
- * 步骤7：如果没有一个闭环匹配候选帧通过Sim3的求解与优化 清空候选闭环关键帧
- * 步骤8：取出闭环匹配上 关键帧的相连关键帧，得到它们的地图点MapPoints放入mvpLoopMapPoints
- * 步骤9：将闭环匹配上关键帧以及相连关键帧的 地图点 MapPoints 投影到当前关键帧进行投影匹配 为当前帧查找更多的匹配
- * 步骤10：判断当前帧 与检测出的所有闭环关键帧是否有足够多的MapPoints匹配	
- * 步骤11：满足匹配点对数>40 寻找成功 清空mvpEnoughConsistentCandidates
- * @return  计算成功 返回true
+ * 
+ * Step 1: Traverse each closed-loop candidate keyframe and construct a sim3 solver
+ * Step 2: Take a key frame pKF from the screened closed-loop candidate frames
+ * Step 3: Match the current frame mpCurrentKF with the closed-loop candidate key frame pKF to obtain matching point pairs
+ *    Step 3.1 Skip candidate closed-loop frames with few matching point pairs
+ *    Step 3.2: Construct Sim3 solver from matching point pairs
+ * Step 4: Iterate each candidate closed-loop key frame Sim3, use the similarity transformation solver to solve, and the similarity transformation from the candidate closed-loop key frame to the schedule frame
+ * Step 5: Through the Sim3 transformation obtained in Step 4, use the sim3 transformation to match to obtain more matching points to make up for the missing matching in Step 3
+ * Step 6: G2O Sim3 optimization, as long as there is a candidate frame through the solution and optimization of Sim3, it will jump out and stop the judgment of other candidate frames
+ * Step 7: If there is no closed-loop matching candidate frame through the solution and optimization of Sim3, clear the candidate closed-loop key frame
+ * Step 8: Take out the connected keyframes that match the keyframes in the closed loop, get their map points MapPoints and put them into mvpLoopMapPoints
+ * Step 9: Match the closed loop on the key frame and the map points MapPoints of the connected key frame, project it to the current key frame for projection matching, and find more matches for the current frame
+ * Step 10: Determine whether the current frame matches all the detected closed-loop keyframes with enough MapPoints	
+ * Step 11: Satisfy the number of matching points > 40, find success, clear mvpEnoughConsistentCandidates
+ * @return  The calculation is successful and returns true
  */
       bool LoopClosing::ComputeSim3()
       {
 	  // For each consistent loop candidate we try to compute a Sim3
-          // 闭环候选帧 数量
+          // Number of closed-loop candidate frames
 	  const int nInitialCandidates = mvpEnoughConsistentCandidates.size();
 	  // We compute first ORB matches for each candidate
 	  // If enough matches are found, we setup a Sim3Solver
-	  // 
 	  ORBmatcher matcher(0.75,true);
 
-	  vector<Sim3Solver*> vpSim3Solvers;//相似变换求解器
-	  vpSim3Solvers.resize(nInitialCandidates);// 每个候选帧都有一个 Sim3Solver
+	  vector<Sim3Solver*> vpSim3Solvers;//Similarity Transform Solver
+	  vpSim3Solvers.resize(nInitialCandidates);// Each candidate frame has a Sim3Solver
 
-	  vector<vector<MapPoint*> > vvpMapPointMatches;//每个候选闭环关键帧 和 当前帧 都会匹配计算 匹配地图点
+	  vector<vector<MapPoint*> > vvpMapPointMatches;//Each candidate closed-loop key frame and the current frame will be matched and calculated
 	  vvpMapPointMatches.resize(nInitialCandidates);
 
-	  vector<bool> vbDiscarded;// 候选闭环关键帧 好坏
+	  vector<bool> vbDiscarded;// Candidate closed-loop keyframes
 	  vbDiscarded.resize(nInitialCandidates);
 
 	  int nCandidates=0; //candidates with enough matches
-// 步骤1：遍历每一个闭环候选关键帧  构造 sim3 求解器
+	  // Step 1: Traverse each closed-loop candidate keyframe, construct sim3, and solver
 	  for(int i=0; i<nInitialCandidates; i++)
 	  {
-// 步骤2：从筛选的闭环候选帧中取出一帧关键帧pKF
+	      // Step 2: Take a key frame pKF from the screened closed-loop candidate frames
 	      KeyFrame* pKF = mvpEnoughConsistentCandidates[i];
 
 	      // avoid that local mapping erase it while it is being processed in this thread
-	   // 防止在LocalMapping中KeyFrameCulling函数将此关键帧作为冗余帧剔除
+	      // Prevent the KeyFrameCulling function from culling this key frame as a redundant frame in LocalMapping
 	      pKF->SetNotErase();
 
 	      if(pKF->isBad())
 	      {
-		  vbDiscarded[i] = true;// 该候选闭环帧 不好
+		  vbDiscarded[i] = true;// the candidate closed-loop frame
 		  continue;
 	      }
- // 步骤3：将当前帧mpCurrentKF与闭环候选关键帧pKF匹配 得到匹配点对
-                 // 通过bow加速得到mpCurrentKF与pKF之间的匹配特征点， vvpMapPointMatches 是匹配特征点对应的 MapPoints
-                 // 通过词包加速匹配 ，对参考关键帧的地图点进行跟踪
+ 		  // Step 3: Match the current frame mpCurrentKF with the closed-loop candidate key frame pKF to obtain matching point pairs
+                 // The matching feature points between mpCurrentKF and pKF are obtained by bow acceleration, vvpMapPointMatches is the MapPoints corresponding to the matching feature points
+                 // Accelerate matching through word bag to track map points of reference keyframes
 	      int nmatches = matcher.SearchByBoW(mpCurrentKF,pKF,vvpMapPointMatches[i]);
 	      
-    //步骤3.1 跳过匹配点对数少的 候选闭环帧
-	      if(nmatches<20)//跟踪到的点数量过少 匹配效果不好
+    	      // Step 3.1 Skip candidate closed-loop frames with few matching point pairs
+	      if(nmatches<20)//The number of points tracked is too small, and the matching effect is not good
 	      {
-		  vbDiscarded[i] = true;// 该候选闭环帧 不好
+		  vbDiscarded[i] = true;// the candidate closed-loop frame
 		  continue;
 	      }
 	      else
 	      {
-    //步骤3.2：  根据匹配点对 构造Sim3求解器 
-            // 如果mbFixScale为true，则是6DoFf优化（双目 RGBD），如果是false，则是7DoF优化（单目 多一个尺度缩放）
-		  
+    		//Step 3.2: Construct Sim3 solver from matching point pairs 
+            	// If mbFixScale is true, it is 6DoFf optimization (binocular RGBD), if it is false, it is 7DoF optimization (monocular one more scale scaling)
 		 Sim3Solver* pSolver = new Sim3Solver(mpCurrentKF,pKF,vvpMapPointMatches[i],mbFixScale);
-		  pSolver->SetRansacParameters(0.99,20,300);// 至少20个内点inliers  最大300次迭代
+		  pSolver->SetRansacParameters(0.99,20,300);// at least 20 inliers, max 300 iterations
 		  vpSim3Solvers[i] = pSolver;
 	      }
-             // 参与Sim3计算的候选关键帧数加1
+              // Add 1 to the number of candidate keyframes involved in Sim3 calculation
 	      nCandidates++;
 	  }
 
-	  bool bMatch = false;// 用于标记是否有一个候选帧通过Sim3的求解与优化
+	  bool bMatch = false;// Used to mark whether there is a candidate frame to solve and optimize through Sim3
 	  // Perform alternatively RANSAC iterations for each candidate
 	  // until one is succesful or all fail
-	// 一直循环所有的候选帧，每个候选帧迭代5次，如果5次迭代后得不到结果，就换下一个候选帧
-	// 直到有一个候选帧首次迭代成功bMatch为true，或者某个候选帧总的迭代次数超过限制，直接将它剔除
- // 步骤4： 迭代每一个候选闭环关键帧   相似变换求解器求解
+	  // Keep looping through all candidate frames, each candidate frame iterates 5 times, if no result is obtained after 5 iterations, change to the next candidate frame
+	  // Until a candidate frame is successfully iterated for the first time, bMatch is true, or the total number of iterations of a candidate frame exceeds the limit, and it is directly eliminated
+ 	  // Step 4: Iterate over each candidate closed-loop keyframe, and the similarity transform solver solves
 	  while(nCandidates > 0 && !bMatch)
 	  {
-	   // 遍历 每一个 候选闭环关键帧 
+	      // Iterate over each candidate closed-loop keyframe 
 	      for(int i=0; i<nInitialCandidates; i++)
 	      {
-		  if(vbDiscarded[i])//不好 直接跳过
+		  if(vbDiscarded[i])
 		      continue;
 
-		  KeyFrame* pKF = mvpEnoughConsistentCandidates[i];//候选闭环关键帧pKF
+		  KeyFrame* pKF = mvpEnoughConsistentCandidates[i];//Candidate closed-loop keyframe pKF
 
 		  // Perform 5 Ransac Iterations
 		  vector<bool> vbInliers;
-		  int nInliers;// 内点数量
-		  bool bNoMore;// 这是局部变量，在pSolver->iterate(...)内进行初始化
+		  int nInliers;// Number of interior points
+		  bool bNoMore;// This is a local variable, initialized inside pSolver->iterate(...)
 
-		  Sim3Solver* pSolver = vpSim3Solvers[i];//对应的sim3求解器
-		  // 最多迭代5次，返回的Scm是候选帧pKF到当前帧mpCurrentKF的Sim3变换（T12）
+		  Sim3Solver* pSolver = vpSim3Solvers[i];//Corresponding sim3 solver
+		  // Iterates up to 5 times, the returned Scm is the candidate frame pKF, to the Sim3 transformation of the current frame mpCurrentKF (T12)
 		  cv::Mat Scm  = pSolver->iterate(5,bNoMore,vbInliers,nInliers);
 
 		  // If Ransac reachs max. iterations discard keyframe
-                  // 经过n次循环，每次迭代5次，总共迭代 n*5 次
-              // 总迭代次数达到最大限制 300次 还没有求出合格的Sim3变换，该候选帧剔除
+                  // After n loops, each iteration is 5 times, for a total of n*5 iterations
+              	  // The total number of iterations reaches the maximum limit of 300 times, and the qualified Sim3 transformation has not been obtained, and the candidate frame is eliminated.
 		  if(bNoMore)
 		  {
 		      vbDiscarded[i]=true;
@@ -395,57 +389,57 @@ namespace ORB_SLAM2
 		  }
 
 		  // If RANSAC returns a Sim3, perform a guided matching and optimize with all correspondences
-		 // 得到了相似变换
+		 // similar transformation
 		  if(!Scm.empty())
 		  {
 		      vector<MapPoint*> vpMapPointMatches(vvpMapPointMatches[i].size(), static_cast<MapPoint*>(NULL));
 		      for(size_t j=0, jend=vbInliers.size(); j<jend; j++)
 		      {
-			// 保存符合sim3变换 的 内点 inlier的地图点MapPoint
+			  // Save the interior point that conforms to the sim3 transformation, the map point MapPoint of the inlier
 			  if(vbInliers[j])
 			    vpMapPointMatches[j]=vvpMapPointMatches[i][j];
 		      }
 		      
-// 步骤5：通过步骤4求取的Sim3变换，使用sim3变换匹配得到更多的匹配点 弥补步骤3中的漏匹配
-                // [sR t;0 1]
-		      cv::Mat R = pSolver->GetEstimatedRotation();// 候选帧pKF到当前帧mpCurrentKF的R（R12）
-		      cv::Mat t = pSolver->GetEstimatedTranslation();// 候选帧pKF到当前帧mpCurrentKF的t（t12），当前帧坐标系下，方向由pKF指向当前帧
-		      const float s = pSolver->GetEstimatedScale();// 候选帧pKF到当前帧mpCurrentKF的变换尺度s（s12） 缩放比例
+		      // Step 5: Through the Sim3 transformation obtained in Step 4, use the sim3 transformation to match to obtain more matching points to make up for the missing matching in Step 3
+                      // [sR t;0 1]
+		      cv::Mat R = pSolver->GetEstimatedRotation();// R (R12) from candidate frame pKF to current frame mpCurrentKF
+		      cv::Mat t = pSolver->GetEstimatedTranslation();// From the candidate frame pKF to t (t12) of the current frame mpCurrentKF, in the current frame coordinate system, the direction is from pKF to the current frame
+		      const float s = pSolver->GetEstimatedScale();// Candidate frame pKF, the transformation scale s (s12) scaling ratio to the current frame mpCurrentKF
                 
-		// 查找更多的匹配（成功的闭环匹配需要满足足够多的匹配特征点数，之前使用SearchByBoW进行特征点匹配时会有漏匹配）
-                // 通过Sim3变换，确定pKF1的特征点在pKF2中的大致区域，同理，确定pKF2的特征点在pKF1中的大致区域
-                // 在该区域内通过描述子进行匹配捕获pKF1和pKF2之前漏匹配的特征点，更新匹配vpMapPointMatches		     
-		      matcher.SearchBySim3(mpCurrentKF,pKF,vpMapPointMatches,s,R,t,7.5);// 7.5 搜索半径参数
+		      // Find more matches (successful closed-loop matching needs to meet enough matching feature points, there will be missing matches when using SearchByBoW for feature point matching before)
+                      // Through Sim3 transformation, determine the approximate area of pKF1's feature points in pKF2, and similarly, determine the approximate area of ​​pKF2's feature points in pKF1
+                     // Matching through descriptors in this area captures the missing matching feature points before pKF1 and pKF2, and updates the matching vpMapPointMatches		     
+		      matcher.SearchBySim3(mpCurrentKF,pKF,vpMapPointMatches,s,R,t,7.5);// 7.5 Search radius parameter
 		      
-// 步骤6：G2O Sim3优化，只要有一个候选帧通过Sim3的求解与优化，就跳出停止对其它候选帧的判断
-                      // OpenCV的Mat矩阵转成Eigen的Matrix类型
-		      g2o::Sim3 gScm(Converter::toMatrix3d(R),Converter::toVector3d(t),s);// 优化初始值
+		      // Step 6: G2O Sim3 optimization, as long as there is a candidate frame through the solution and optimization of Sim3, it will jump out and stop the judgment of other candidate frames
+                      // Convert OpenCV's Mat matrix to Eigen's Matrix type
+		      g2o::Sim3 gScm(Converter::toMatrix3d(R),Converter::toVector3d(t),s);// Optimize initial value
 		      
-                // 如果mbFixScale为true，则是6DoFf优化（双目 RGBD），如果是false，则是7DoF优化（单目 多一维 空间尺度）
-                // 优化mpCurrentKF与pKF对应的MapPoints间的Sim3，得到优化后的量gScm		      
+                	// If mbFixScale is true, it is a 6DoF optimization (binocular RGBD), if it is false, it is a 7DoF optimization (monocular multi-dimensional spatial scale)
+                	// Optimize the Sim3 between the MapPoints corresponding to mpCurrentKF and pKF to obtain the optimized quantity gScm		      
 		      const int nInliers = Optimizer::OptimizeSim3(mpCurrentKF, pKF, vpMapPointMatches, gScm, 10, mbFixScale);
 
 		      // If optimization is succesful stop ransacs and continue
-	 // 最后 G2O 符合的内点数 大于20 则求解成功
+	 	      // Finally, the number of interior points that G2O conforms to is greater than 20, and the solution is successful.
 		      if(nInliers>=20)
 		      {
 			  bMatch = true;
-			   // mpMatchedKF 就是最终闭环检测出来与当前帧形成闭环的关键帧
-			  mpMatchedKF = pKF;// 闭环帧
-			  // 得到从世界坐标系到该候选帧的Sim3变换，Scale=1
+			   // mpMatchedKF is the key frame detected by the final closed loop to form a closed loop with the current frame
+			  mpMatchedKF = pKF;// closed-loop frame
+			  // Get the Sim3 transformation from the world coordinate system to the candidate frame, Scale=1
 			  g2o::Sim3 gSmw(Converter::toMatrix3d(pKF->GetRotation()),Converter::toVector3d(pKF->GetTranslation()),1.0);// T2W     
-			  // 得到g2o优化后从世界坐标系到当前帧的Sim3变换
+			  // Get the Sim3 transformation from the world coordinate system to the current frame after g2o optimization
 			  mg2oScw = gScm*gSmw;// T1W =  T12 * T2W
 			  mScw = Converter::toCvMat(mg2oScw);
 
 			  mvpCurrentMatchedPoints = vpMapPointMatches;
-			  break;// 只要有一个候选帧通过Sim3的求解与优化，就跳出停止对其它候选帧的判断
+			  break;// As long as one candidate frame passes the solution and optimization of Sim3, it will jump out and stop the judgment of other candidate frames.
 		      }
 		  }
 	      }
 	  }
 	  
- // 步骤7：如果没有一个闭环匹配候选帧通过Sim3的求解与优化 清空候选闭环关键帧
+ 	  // Step 7: If there is no closed-loop matching candidate frame through the solution and optimization of Sim3, clear the candidate closed-loop key frame
 	  if(!bMatch)
 	  {
 	      for(int i=0; i<nInitialCandidates; i++)
@@ -454,26 +448,25 @@ namespace ORB_SLAM2
 	      return false;
 	  }
 	  
-// 步骤8：取出闭环匹配上 关键帧的相连关键帧，得到它们的MapPoints放入mvpLoopMapPoints
-	  // 注意是匹配上的那个关键帧：mpMatchedKF
-	  // 将mpMatchedKF相连的关键帧全部取出来放入vpLoopConnectedKFs
-	  // 将vpLoopConnectedKFs的MapPoints取出来放入mvpLoopMapPoints
+	  // Step 8: Take out the connected keyframes of the keyframes on the closed loop matching, get their MapPoints and put them into mvpLoopMapPoints
+	  // Note the key frame on the match: mpMatchedKF
+	  // Take out the MapPoints of vpLoopConnectedKFs and put them into mvpLoopMapPoints
 	  // Retrieve MapPoints seen in Loop Keyframe and neighbors
-	  vector<KeyFrame*> vpLoopConnectedKFs = mpMatchedKF->GetVectorCovisibleKeyFrames();// 闭环匹配上 关键帧的相连关键帧
-	  vpLoopConnectedKFs.push_back(mpMatchedKF);//连同自己
+	  vector<KeyFrame*> vpLoopConnectedKFs = mpMatchedKF->GetVectorCovisibleKeyFrames();// On closed-loop matching, the connected keyframes of the keyframes
+	  vpLoopConnectedKFs.push_back(mpMatchedKF);
 	  mvpLoopMapPoints.clear();
 	  // vector<KeyFrame*>::iterator
-	 // 迭代每一个闭环关键帧及其相邻帧
+	  // Iterate over each closed loop keyframe and its neighbors
 	  for(auto  vit=vpLoopConnectedKFs.begin(); vit!=vpLoopConnectedKFs.end(); vit++)
 	  {
-	      KeyFrame* pKF = *vit;//每一个闭环关键帧及其相邻帧
-	      vector<MapPoint*> vpMapPoints = pKF->GetMapPointMatches();//对应帧的所有地图点
+	      KeyFrame* pKF = *vit;//Each closed-loop keyframe and its neighbors
+	      vector<MapPoint*> vpMapPoints = pKF->GetMapPointMatches();
 	      for(size_t i=0, iend=vpMapPoints.size(); i<iend; i++)
 	      {
-		  MapPoint* pMP = vpMapPoints[i];//每一个地图点
+		  MapPoint* pMP = vpMapPoints[i];
 		  if(pMP)
 		  {
-		      if(!pMP->isBad() && pMP->mnLoopPointForKF != mpCurrentKF->mnId)//
+		      if(!pMP->isBad() && pMP->mnLoopPointForKF != mpCurrentKF->mnId)
 		      {
 			  mvpLoopMapPoints.push_back(pMP);// 闭环地图点 加入该点
 			  // 标记该MapPoint被mpCurrentKF闭环时观测到并添加，避免重复添加
