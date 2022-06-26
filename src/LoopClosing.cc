@@ -123,7 +123,7 @@ namespace ORB_SLAM2
 	  {
 	      unique_lock<mutex> lock(mMutexLoopQueue);
 	      mpCurrentKF = mlpLoopKeyFrameQueue.front();
-	      mlpLoopKeyFrameQueue.pop_front();//出队
+	      mlpLoopKeyFrameQueue.pop_front();
 	      // Avoid that a keyframe can be erased while it is being process by this thread
 	      mpCurrentKF->SetNotErase();
 	  }
@@ -540,7 +540,7 @@ namespace ORB_SLAM2
 	 */ 
       void LoopClosing::CorrectLoop()
       {
-	  cout << "检测到闭环 Loop detected!" << endl;
+	  cout << "Loop detected!" << endl;
 
 	  // Send a stop signal to Local Mapping
 	  // Avoid new keyframes are inserted while correcting the loop
@@ -622,7 +622,7 @@ namespace ORB_SLAM2
      	      // Step 4.2: After getting the pose of the connected frames adjusted in Step 4.1, correct the MapPoints of these keyframes
 	      // Correct all MapPoints obsrved by current keyframe and neighbors, so that they align with the other side of the loop
 	     // KeyFrameAndPose::iterator
-            // Traverse each connected frame and use the optimized pose to correct frame-related map points
+             // Traverse each connected frame and use the optimized pose to correct frame-related map points
 	    for(auto mit=CorrectedSim3.begin(), mend=CorrectedSim3.end(); mit!=mend; mit++)
 	      {
 		  KeyFrame* pKFi = mit->first;//frame
@@ -701,7 +701,6 @@ namespace ORB_SLAM2
 	  // Project MapPoints observed in the neighborhood of the loop keyframe
 	  // into the current keyframe and neighbors using corrected poses.
 	  // Fuse duplications.
-	  
 	  // Step 6: Check and replace MapPoints by projecting the map points mvpLoopMapPoints of the connected keyframes when the loop is closed to these adjacent keyframes of the current frame	  
 	  SearchAndFuse(CorrectedSim3);
 
