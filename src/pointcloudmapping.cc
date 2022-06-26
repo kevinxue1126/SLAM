@@ -432,74 +432,74 @@ void PointCloudMapping::viewer()
        
             //cv::imwrite("result.jpg", colorImgs[i]);
 
-            //PointCloud::Ptr p = generatePointCloud( keyframes[i], colorImgs[i], depthImgs[i] );// 生成新一帧的点云
-             PointCloud::Ptr p = generatePointCloud( keyframes[i], RGBImgs[i], depthImgs[i] );// 生成新一帧的点云  
-            // 处理每一帧 获取语义分割点云的信息===============================
-            extract_indices.setInputCloud(p);// 设置输入点云 指针 
- //  #pragma omp parallel for   // =======================omp 多线程 并行处理
-            for (int n = 0; n < vec_indices.size() ; n++)// 每个点云团
+            //PointCloud::Ptr p = generatePointCloud( keyframes[i], colorImgs[i], depthImgs[i] );// Generate a point cloud for a new frame
+             PointCloud::Ptr p = generatePointCloud( keyframes[i], RGBImgs[i], depthImgs[i] );// Generate a point cloud for a new frame
+            // Process each frame to obtain semantically segmented point cloud information
+            extract_indices.setInputCloud(p);// Set the input point cloud pointer
+ //  #pragma omp parallel for   // =======================omp Multi-threaded parallel processing
+            for (int n = 0; n < vec_indices.size() ; n++)// each point cloud
             {
-               pcl::PointIndices & indices = vec_indices[n];       // 每个点云团的索引
-               std::string&   cluster_name = clusters_name[n];    // 名字
-               float          cluster_prob = clusters_prob[n];    // 置信度
-               int            class_id     = clusters_class_id[n];// 类别id 
+               pcl::PointIndices & indices = vec_indices[n];       // index of each point cloud
+               std::string&   cluster_name = clusters_name[n];    //  name
+               float          cluster_prob = clusters_prob[n];    // confidence
+               int            class_id     = clusters_class_id[n];// type id 
                extract_indices.setIndices (boost::make_shared<const pcl::PointIndices> (indices));
-               // 设置索引=============
+               // set index
                PointCloud::Ptr before (new PointCloud);
-               extract_indices.filter (*before);//提取对于索引的点云
-               // 统计学滤波剔除 噪点==
+               extract_indices.filter (*before);//Extract point cloud for index
+               // Statistical filtering to remove noise
                PointCloud::Ptr after_stat (new PointCloud);
-               stat.setInputCloud (before);//设置待滤波的点云
-	       stat.filter (*after_stat); //存储内点
-               // 体素栅格下采样=======
+               stat.setInputCloud (before);//Set the point cloud to be filtered
+	       stat.filter (*after_stat); //storage point
+               // Voxel grid downsampling
                PointCloud::Ptr after_voxel (new PointCloud);
                voxel.setInputCloud( after_stat );
                voxel.filter( *after_voxel );
-               // 计算点云中心=========
+               // Compute point cloud center
                Eigen::Vector4f cent;
                pcl::compute3DCentroid(*after_voxel, cent);
-               // 计算点云 点范围======
+               // Calculate point cloud point range
                Eigen::Vector4f minPt, maxPt;
                pcl::getMinMax3D (*after_voxel, minPt, maxPt);
                
-               // 新建 语义目标对象====
+               // Create a new semantic target object
                Cluster cluster;
-               cluster.object_name = cluster_name;// 名字
-               cluster.class_id    = class_id;    // 类别id
-               cluster.prob        = cluster_prob;// 置信度
-               cluster.minPt       = Eigen::Vector3f(minPt[0], minPt[1], minPt[2]);// 最小值
-               cluster.maxPt       = Eigen::Vector3f(maxPt[0], maxPt[1], maxPt[2]);// 大
-               cluster.centroid    = Eigen::Vector3f(cent[0],  cent[1],  cent[2]); // 中心
+               cluster.object_name = cluster_name;// name
+               cluster.class_id    = class_id;    // type id
+               cluster.prob        = cluster_prob;// confidence
+               cluster.minPt       = Eigen::Vector3f(minPt[0], minPt[1], minPt[2]);// minimum
+               cluster.maxPt       = Eigen::Vector3f(maxPt[0], maxPt[1], maxPt[2]);// big
+               cluster.centroid    = Eigen::Vector3f(cent[0],  cent[1],  cent[2]); // center
                
-               // 融合进总的 clusters
+               // Fusion into the total clusters
                sem_merge(cluster);
 
             }
-           // 有序点云转换成无序点云
+           // Convert an ordered point cloud to an unordered point cloud
            std::vector<int> temp;
            PointCloud::Ptr out_pt(new PointCloud());
            pcl::removeNaNFromPointCloud(*p, *out_pt, temp);
-           *globalMap += *out_pt;                   // 加入到 总的 点云地图中  
-           time = getTimeUsec() - time;// 结束计时
-           printf("KeyFrame %ld Semtic Mapping time: %ld ms\n", i, time/1000); // 显示检测时间
+           *globalMap += *out_pt;                   // Add to the overall point cloud map
+           time = getTimeUsec() - time;// end timer
+           printf("KeyFrame %ld Semtic Mapping time: %ld ms\n", i, time/1000); // Display detection time
         }
 
-        PointCloud::Ptr tmp(new PointCloud());      // 体素格滤波后的点云
-        voxel.setInputCloud( globalMap );           // 体素格滤波器 输入原点云
-        voxel.filter( *tmp );                       // 滤波后的点云
-        globalMap->swap( *tmp );                    // 全局点云地图 替换为 体素格滤波后的点云
+        PointCloud::Ptr tmp(new PointCloud());      // Voxel filtered point cloud
+        voxel.setInputCloud( globalMap );           // Voxel Lattice Filter, Input Origin Cloud
+        voxel.filter( *tmp );                       // filtered point cloud
+        globalMap->swap( *tmp );                    // The global point cloud map is replaced by the voxel grid filtered point cloud
         map_state_ok = 1;
         /*
-        viewer.showCloud( globalMap );              // 显示 点云
+        viewer.showCloud( globalMap );              // show point cloud
         cout << "show global map, size=" << globalMap->points.size() << endl;
         */
 
-        lastKeyframeSize = N;                       // 迭代更新上次已经更新到的 关键帧id
+        lastKeyframeSize = N;                       // Iteratively update the keyframe id that has been updated last time
 
-// 显示点云 ==========  
+	// show point cloud
         add_cube(); 
         pcl::visualization::PointCloudColorHandlerRGBField<PointT> rgb(globalMap);
-        pcl_viewer_prt->removePointCloud("SemMap");// 去除原来的点云====
+        pcl_viewer_prt->removePointCloud("SemMap");// remove the original point cloud
         pcl_viewer_prt->addPointCloud<PointT> (globalMap, rgb, "SemMap");
         pcl_viewer_prt->setPointCloudRenderingProperties (
                        pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "SemMap");
@@ -508,7 +508,7 @@ void PointCloudMapping::viewer()
         {
           //obj_pt = cluster_large.c_ptr;
           pcl_viewer_prt->spinOnce (100);// 
-          // pcl_viewer_prt->spin(); // 太快上面的检测就做不到了
+          // pcl_viewer_prt->spin(); // Too fast the above test can't be done
           boost::this_thread::sleep (boost::posix_time::microseconds (100000));// 
          //usleep(3000);
         }
@@ -522,19 +522,19 @@ void PointCloudMapping::viewer()
 }
 
 
-// 点云更新显示
+// Point cloud update display
 void PointCloudMapping::update()
 {
 std::cout<< "update"<< std::endl; 
 add_cube(); 
 pcl::visualization::PointCloudColorHandlerRGBField<PointT> rgb(globalMap);
-pcl_viewer_prt->removePointCloud("SemMap");// 去除原来的点云====
+pcl_viewer_prt->removePointCloud("SemMap");// remove the original point cloud
 pcl_viewer_prt->addPointCloud<PointT> (globalMap, rgb, "SemMap");
 pcl_viewer_prt->setPointCloudRenderingProperties (
                pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "SemMap");	       
 //obj_pt = cluster_large.c_ptr;
 pcl_viewer_prt->spinOnce (100);// 
-boost::this_thread::sleep (boost::posix_time::microseconds (100000));   //随时间
+boost::this_thread::sleep (boost::posix_time::microseconds (100000));   //over time
 }
 
 
