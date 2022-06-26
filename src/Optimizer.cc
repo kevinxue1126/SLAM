@@ -107,10 +107,10 @@ namespace ORB_SLAM2
         // typedef g2o::BlockSolver< g2o::BlockSolverTraits<6,3> > Block;  // The pose dimension is 6 (optimization variable dimension), and the landmark dimension is 3
 	linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();// matrix solver pointer
 	// linearSolver = new g2o::LinearSolverCSparse<g2o::BlockSolver_6_3::PoseMatrixType>();
-      //步骤1.2： 设置求解器
+      	// Step 1.2: Set up the solver
 	g2o::BlockSolver_6_3 * solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
-      //步骤1.3：  设置函数优化方法
-	g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);// LM 莱马算法
+        // Step 1.2: Set up the solver
+	g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);// LM Lymar algorithm
 	// g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr );// 高斯牛顿
 	// g2o::OptimizationAlgorithmDogleg* solver = new g2o::OptimizationAlgorithmDogleg( solver_ptr );//狗腿算法
        // 步骤1.4：设置稀疏优化求解器  
