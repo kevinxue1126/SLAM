@@ -271,11 +271,11 @@ namespace ORB_SLAM2
 			    //  Step 4: Find the matching points corresponding to the shortest distance and the second shortest distance
 			    if(dist<bestDist1)// dist < bestDist1 < bestDist2，更新bestDist1 bestDist2
 			    {
-				bestDist2=bestDist1;// 次最短的距离
-				bestDist1=dist;// 最短的距离
+				bestDist2=bestDist1;
+				bestDist1=dist;
 				bestIdxF=realIdxF;
 			    }
-			    else if(dist<bestDist2)// bestDist1 < dist < bestDist2，更新bestDist2
+			    else if(dist<bestDist2)// bestDist1 < dist < bestDist2，update bestDist2
 			    {
 				bestDist2=dist;
 			    }
