@@ -1730,112 +1730,112 @@ namespace ORB_SLAM2
 	int ORBmatcher::SearchByProjection(Frame &CurrentFrame, KeyFrame *pKF, const set<MapPoint*> &sAlreadyFound, const float th , const int ORBdist)
 	{
 	    int nmatches = 0;
-	  //  当前帧旋转平移矩阵向量 相机坐标点
+	    // current frame rotation translation matrix vector
 	    const cv::Mat Rcw = CurrentFrame.mTcw.rowRange(0,3).colRange(0,3);
 	    const cv::Mat tcw = CurrentFrame.mTcw.rowRange(0,3).col(3);
 	    const cv::Mat Ow = -Rcw.t()*tcw;
 
 	    // Rotation Histogram (to check rotation consistency)
-	    // 匹配点对观测方向一致性检测
-	    // 匹配点对观测方向差值 方向直方图
+	    // Matching point pair observation direction consistency detection
+	    // Match point pair observation direction difference direction histogram
 	    vector<int> rotHist[HISTO_LENGTH];
 	    for(int i=0;i<HISTO_LENGTH;i++)
 		rotHist[i].reserve(500);
 	    const float factor = 1.0f/HISTO_LENGTH;
 	    
-// 步骤1：获取关键帧pKF对应的地图点vpMPs，遍历
-	    const vector<MapPoint*> vpMPs = pKF->GetMapPointMatches();// 所有关键帧中的地图点
-	    for(size_t i=0, iend=vpMPs.size(); i<iend; i++)// 获取关键帧 对应的地图点vpMPs，遍历
+	    // Step 1: Obtain the map point vpMPs corresponding to the key frame pKF, and foreach
+	    const vector<MapPoint*> vpMPs = pKF->GetMapPointMatches();// map points in all keyframes
+	    for(size_t i=0, iend=vpMPs.size(); i<iend; i++)// Get the map point vpMPs corresponding to the key frame, foreach
 	    {
-		MapPoint* pMP = vpMPs[i];//关键帧中的地图点
-		if(pMP)// 地图点存在
+		MapPoint* pMP = vpMPs[i];//map points in keyframes
+		if(pMP)// map point exists
 		{
-	       // 1). 若该点为NULL、isBad或者
-		  // 在SearchByBow中已经匹配上（Relocalization中首先会通过SearchByBow匹配一次），抛弃；
+	       	  // 1). If the point is NULL, isBad or
+		  // It has been matched in SearchByBow (relocalization will first match once through SearchByBow), discard
 		    if(!pMP->isBad() && !sAlreadyFound.count(pMP))
 		    {
 			//Project
- // 步骤2：关键帧 对应的有效地图点投影到 当前帧 像素平面上 查看是否在视野内
-			cv::Mat x3Dw = pMP->GetWorldPos();// 关键帧地图点在 世界坐标系下 的坐标
-			cv::Mat x3Dc = Rcw*x3Dw+tcw;// 关键帧地图点在 当前帧坐标系（相机坐标系）下的坐标
-                       // 得到归一化相机平面上的点
+ 			// Step 2: Project the corresponding valid map point of the key frame to the pixel plane of the current frame to check whether it is within the field of view
+			cv::Mat x3Dw = pMP->GetWorldPos();// The coordinates of the keyframe map point in the world coordinate system
+			cv::Mat x3Dc = Rcw*x3Dw+tcw;// The coordinates of the keyframe map point in the current frame coordinate system (camera coordinate system)
+                        // get points on normalized camera plane
 			const float xc = x3Dc.at<float>(0);
 			const float yc = x3Dc.at<float>(1);
-			const float invzc = 1.0/x3Dc.at<float>(2);//归一化
-			// 有相机内参数 得到在像素平面上的投影点(u,v) 像素坐标
+			const float invzc = 1.0/x3Dc.at<float>(2);//Normalized
+			// There are camera internal parameters to get the pixel coordinates of the projected point (u, v) on the pixel plane
 			const float u = CurrentFrame.fx*xc*invzc+CurrentFrame.cx;
 			const float v = CurrentFrame.fy*yc*invzc+CurrentFrame.cy;	
-		      //  投影点(u,v)不在畸变矫正过的图像范围内 抛弃
+		      	//  Projection points (u, v) are not discarded within the distortion-corrected image
 			if(u<CurrentFrame.mnMinX || u>CurrentFrame.mnMaxX)
 			    continue;
 			if(v<CurrentFrame.mnMinY || v>CurrentFrame.mnMaxY)
 			    continue;
 
 			// Compute predicted scale level
-// 步骤2： 地图点的距离dist3D不在地图点的可观测距离内（根据地图点对应的金字塔层数，
-			//也就是提取特征的neighbourhood尺寸），抛弃
-			cv::Mat PO = x3Dw-Ow;// 关键帧地图点到 当前帧相机中的的相对坐标
-			float dist3D = cv::norm(PO);//关键帧地图点 距离当前帧相机中心的距离
+			// Step 2: The distance dist3D of the map point is not within the observable distance of the map point (according to the number of pyramid layers corresponding to the map point, 
+			// that is the neighborhood size of the extracted feature)
+			cv::Mat PO = x3Dw-Ow;
+			float dist3D = cv::norm(PO);
 			const float maxDistance = pMP->GetMaxDistanceInvariance();
-			//地图点的可观测距离内（根据地图点对应的金字塔层数，也就是提取特征的neighbourhood尺寸）
+			//Within the observable distance of the map point (according to the number of pyramid layers corresponding to the map point, that is, the neighborhood size of the extracted feature)
 			const float minDistance = pMP->GetMinDistanceInvariance();
 			// Depth must be inside the scale pyramid of the image
-			// 地图点的距离dist3D不在地图点的可观测距离内   
+			// The distance of the map point dist3D is not within the observable distance of the map point   
 			if(dist3D < minDistance || dist3D > maxDistance)
 			    continue;
 			
-// 步骤3：通过地图点的距离dist3D，预测特征对应金字塔层nPredictedLevel，得到搜索半径，得到候选匹配点
-		    // 并获取搜索window大小（th*scale），在以上约束的范围内，
-		  // 搜索得到候选匹配点集合向量vIndices2
-			int nPredictedLevel = pMP->PredictScale(dist3D,&CurrentFrame);//  通过地图点的距离dist3D，预测特征对应金字塔层nPredictedLevel
-			// Search in a window 并获取搜索window大小（th*scale），
+			// Step 3: Through the distance dist3D of the map points, the predicted feature corresponds to the pyramid layer nPredictedLevel, the search radius is obtained, and the candidate matching point is obtained
+		    	// And get the search window size (th*scale), within the bounds of the above constraints
+		  	// Search to get the candidate matching point set vector vIndices2
+			int nPredictedLevel = pMP->PredictScale(dist3D,&CurrentFrame);//  Through the distance dist3D of map points, the predicted feature corresponds to the pyramid level nPredictedLevel
+			// Search in a window and get the search window size (th*scale)
 			const float radius = th*CurrentFrame.mvScaleFactors[nPredictedLevel];
-			//  在以上约束的范围内，搜索得到候选匹配点集合向量vIndices2
-			// 对于 特征点格子内 图像金字塔的 相应层上 的候选特征点
+			//  Within the scope of the above constraints, the search obtains the candidate matching point set vector vIndices2
+			//For the feature point grid, the candidate feature points on the corresponding layers of the image pyramid
 			const vector<size_t> vIndices2 = CurrentFrame.GetFeaturesInArea(u, v, radius, nPredictedLevel-1, nPredictedLevel+1);
 			if(vIndices2.empty())
 			    continue;
 
-			const cv::Mat dMP = pMP->GetDescriptor();//关键帧地图点的描述子
+			const cv::Mat dMP = pMP->GetDescriptor();//Descriptors for keyframe map points
 			int bestDist = 256;
 			int bestIdx2 = -1;
-// 步骤4：计算地图点的描述子和候选匹配点描述子距离，获得最近距离的最佳匹配，但是也要满足距离<ORBdist。		
+			// Step 4: Calculate the distance between the descriptor of the map point and the descriptor of the candidate matching point to obtain the best match with the closest distance, but also satisfy the distance < ORBdist		
 			// vector<size_t>::const_iterator
-			for(auto vit=vIndices2.begin(); vit!=vIndices2.end(); vit++)//每一个候选匹配点
+			for(auto vit=vIndices2.begin(); vit!=vIndices2.end(); vit++)//each candidate matching point
 			{
 			    const size_t i2 = *vit;
-			    if(CurrentFrame.mvpMapPoints[i2])//当前帧每一个候选匹配点 已经匹配到了 地图点 跳过
+			    if(CurrentFrame.mvpMapPoints[i2])//Each candidate matching point in the current frame has been matched to a map point and skipped
 				continue;
 
-			    const cv::Mat &d = CurrentFrame.mDescriptors.row(i2);/// 候选匹配点描述子
-			    const int dist = DescriptorDistance(dMP,d);//  计算地图点的描述子和候选匹配点描述子距离
+			    const cv::Mat &d = CurrentFrame.mDescriptors.row(i2);/// candidate matching point descriptor
+			    const int dist = DescriptorDistance(dMP,d);//  Calculate the distance between the descriptor of the map point and the descriptor of the candidate matching point
 
-			    if(dist<bestDist)// 获得最近距离的最佳匹配，
+			    if(dist<bestDist)// Get the best match with the closest distance
 			    {
-				bestDist=dist;//最短的距离
-				bestIdx2=i2;//对应的 当前帧 关键点下标
+				bestDist=dist;//shortest distance
+				bestIdx2=i2;//The corresponding subscript of the current frame key point
 			    }
 			}
 			
-// 步骤5：最短距离阈值检测  要满足最短距离距离<ORBdist。
-			if(bestDist <= ORBdist)//但是也要满足距离<ORBdist 100
+			// Step 5: The shortest distance threshold detection should satisfy the shortest distance distance < ORBdist
+			if(bestDist <= ORBdist)//But also satisfy distance < ORBdist 100
 			{
-			    CurrentFrame.mvpMapPoints[bestIdx2]=pMP;// 为当前帧生成和关键帧匹配上的地图点
+			    CurrentFrame.mvpMapPoints[bestIdx2]=pMP;// Generate map points on the current frame and match the keyframes
 			    nmatches++;
 
-			    if(mbCheckOrientation)//  最后，还需要通过直方图验证描述子的方向是否匹配
+			    if(mbCheckOrientation)//  Finally, it is also necessary to verify that the orientations of the descriptors match through the histogram
 			    {
-				float rot = pKF->mvKeysUn[i].angle - CurrentFrame.mvKeysUn[bestIdx2].angle;//匹配点观测方向差
-				//将关键帧与当前帧匹配点的观测方向angle相减
-				// 得到rot（0<=rot<360），放入一个直方图中
+				float rot = pKF->mvKeysUn[i].angle - CurrentFrame.mvKeysUn[bestIdx2].angle;//Match point observation direction difference
+				// Subtract the angle of the observation direction of the keyframe and the matching point of the current frame
+				// Get rot (0<=rot<360) and put it into a histogram
 				if(rot<0.0)
 				    rot+=360.0f;
 				int bin = round(rot*factor);
-				// 对于每一对匹配点的角度差，均可以放入一个bin的范围内（360/HISTO_LENGTH）
+				// The angle difference of each pair of matching points can be put into the range of a bin (360/HISTO_LENGTH)
 				if(bin==HISTO_LENGTH)
 				    bin=0;
 				assert(bin>=0 && bin<HISTO_LENGTH);
-				rotHist[bin].push_back(bestIdx2);// 方向直方图
+				rotHist[bin].push_back(bestIdx2);// Orientation histogram
 			    }
 			}
 
@@ -1843,16 +1843,16 @@ namespace ORB_SLAM2
 		}
 	    }
 	    
-// 步骤6：匹配点对 观测方向一致性 检测
-	// 其中角度直方图是用来剔除不满足两帧之间角度旋转的外点的，也就是所谓的旋转一致性检测
-	    if(mbCheckOrientation)//  最后，还需要通过直方图验证描述子的方向是否匹配
+	    // Step 6: Matching point pair observation direction consistency detection
+	    // The angle histogram is used to remove outliers that do not satisfy the angle rotation between two frames, which is the so-called rotation consistency detection
+	    if(mbCheckOrientation)//  Finally, it is also necessary to verify that the orientations of the descriptors match through the histogram
 	    {
 		int ind1=-1;
 		int ind2=-1;
 		int ind3=-1;
-	// 统计直方图最高的三个bin保留，其他范围内的匹配点剔除。
-	// 另外，若最高的比第二高的高10倍以上，则只保留最高的bin中的匹配点。
-	// 若最高的比第 三高的高10倍以上，则 保留最高的和第二高bin中的匹配点。
+		// The three highest bins in the statistical histogram are retained, and matching points in other ranges are eliminated.
+		// In addition, if the highest one is more than 10 times higher than the second highest, only the matching points in the highest bin are kept.
+		// If the highest is more than 10 times higher than the third, then keep the matching points in the highest and second highest bins.
 		ComputeThreeMaxima(rotHist,HISTO_LENGTH,ind1,ind2,ind3);
 
 		for(int i=0; i<HISTO_LENGTH; i++)
@@ -1872,57 +1872,57 @@ namespace ORB_SLAM2
 	}
 
 	
-/**
- * @brief  统计直方图最高的三个bin保留，其他范围内的匹配点剔除。
-		 另外，若最高的比第二高的高10倍以上，则只保留最高的bin中的匹配点。
-		 若最高的比第 三高的高10倍以上，则 保留最高的和第二高bin中的匹配点。
- * @param  histo  直方图
- * @param  L         直方图的大小
- * @param  ind1   数量最高的一个bin
- * @param  ind2   数量次高的一个bin
- * @param  ind3   数量第三高的一个bin
- */		
+	/**
+	 * @brief  The three highest bins in the statistical histogram are retained, and matching points in other ranges are eliminated.
+			 In addition, if the highest one is more than 10 times higher than the second highest, only the matching points in the highest bin are kept.
+			 If the highest is more than 10 times higher than the third, then keep the matching points in the highest and second highest bins.
+	 * @param  histo    Histogram
+	 * @param  L        the size of the histogram
+	 * @param  ind1     The highest number of bins
+	 * @param  ind2     A bin with the second highest number
+	 * @param  ind3     The third highest number of bins
+	 */		
 	void ORBmatcher::ComputeThreeMaxima(vector<int>* histo, const int L, int &ind1, int &ind2, int &ind3)
 	{
 	    int max1=0;
 	    int max2=0;
 	    int max3=0;
-// 步骤1：遍历直方图的 每一个 bin 查看其统计计数情况
+	    // Step 1: Traverse each bin of the histogram to view its statistical count
 	    for(int i=0; i<L; i++)
 	    {
 		const int s = histo[i].size();
-// 步骤2：保留最高的bin的 下标		
+		// Step 2: Keep the index of the highest bin		
 		if(s>max1)
 		{
-		    max3=max2;// 第三高 计数值
-		    max2=max1;// 第二高 计数值
-		    max1=s;// 第一高 计数值
+		    max3=max2;// Third highest count value
+		    max2=max1;// Second highest count value
+		    max1=s;// first high count value
 		    ind3=ind2;
 		    ind2=ind1;
-		    ind1=i;// 第一高 计数值 对应的 直方图 序列下标 0~360 >>> 0~30 
+		    ind1=i;// The histogram sequence index corresponding to the first high count value is 0~360 >>> 0~30
 		}
-// 步骤3：保留次高的bin的 下标			
+		// Step 3: Keep the subscript of the next highest bin			
 		else if(s>max2)
 		{
-		    max3=max2;// 第三高 计数值
-		    max2=s;// 第二高 计数值
+		    max3=max2;
+		    max2=s;
 		    ind3=ind2;
 		    ind2=i;
 		}
-// 步骤4：保留第三高的bin的 下标			
+		// Step 4: Keep the index of the third highest bin			
 		else if(s>max3)
 		{
-		    max3=s;// 第三高 计数值
+		    max3=s;
 		    ind3=i;
 		}
 	    }
-//步骤5：若最高的比第二高的 高10倍以上，则只保留最高的bin中的匹配点
+	    //Step 5: If the highest is more than 10 times higher than the second highest, then only keep the matching points in the highest bin
 	    if(max2 < 0.1f*(float)max1)  
 	    {
 		ind2=-1;
 		ind3=-1;
 	    }
-//步骤6： 若最高的比第 三高的高10倍以上，则 保留最高的和第二高bin中的匹配点。
+	  //Step 6: If the highest bin is more than 10 times higher than the third highest bin, keep the matching points in the highest and second highest bins.
 	  else if(max3<0.1f*(float)max1)
 	    {
 		ind3=-1;
@@ -1932,20 +1932,20 @@ namespace ORB_SLAM2
 
 	// Bit set count operation from
 	// http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
-/**
- * @brief     二进制向量之间 相似度匹配距离
- * @param  a  二进制向量
- * @param  b  二进制向量
- * @return 
- */	
+	/**
+	 * @brief     Similarity matching distance between binary vectors
+	 * @param  a  binary vector
+	 * @param  b  binary vector
+	 * @return 
+	 */	
 	int ORBmatcher::DescriptorDistance(const cv::Mat &a, const cv::Mat &b)
 	{
-	    const int *pa = a.ptr<int32_t>();//指针
+	    const int *pa = a.ptr<int32_t>();//pointer
 	    const int *pb = b.ptr<int32_t>();
 
 	    int dist=0;
 
-	    for(int i=0; i<8; i++, pa++, pb++)//只计算了前八个 二进制位 的差异
+	    for(int i=0; i<8; i++, pa++, pb++)//Only the difference of the first eight binary bits is calculated
 	    {
 		unsigned  int v = *pa ^ *pb;
 		v = v - ((v >> 1) & 0x55555555);
