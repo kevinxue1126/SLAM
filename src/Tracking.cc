@@ -1,80 +1,83 @@
-/* 跟踪线程 深度 双目初始化位姿 运动模型 关键帧模式 重定位 局部地图跟踪 关键帧
+/* 
 *This file is part of ORB-SLAM2.
+* Tracking Thread Depth Binocular Initialization Pose Motion Model Keyframe Mode Relocalization Local Map Tracking Keyframe
+* mpMap is our entire pose and map (which can be imagined as the interface world of ORB-SLAM runtime), 
+* and MapPoint and KeyFrame are included in this mpMap. 
+* Therefore, when creating these three objects (map, map point, keyframe), the relationship between the three cannot be missing in the constructor.
 * 
-* mpMap就是我们整个位姿与地图（可以想象成ORB-SLAM运行时的那个界面世界），
-* MapPoint和KeyFrame都被包含在这个mpMap中。
-* 因此创建这三者对象（地图，地图点，关键帧）时，
-* 三者之间的关系在构造函数中不能缺少。
 * 
-* 另外，由于一个关键帧提取出的特征点对应一个地图点集，
-* 因此需要记下每个地图点的在该帧中的编号；
+* In addition, since the feature points extracted from a key frame correspond to a map point set, 
+* it is necessary to note down the number of each map point in the frame;
 * 
-* 同理，一个地图点会被多帧关键帧观测到，
-* 也需要几下每个关键帧在该点中的编号。
+* In the same way, a map point will be observed by multiple keyframes, 
+* and it also needs a few times the number of each keyframe in the point.
 * 
-* 地图点，还需要完成两个运算，第一个是在观测到该地图点的多个特征点中（对应多个关键帧），
-* 挑选出区分度最高的描述子，作为这个地图点的描述子；
+* For map points, two operations need to be completed. 
+* The first is to select the descriptor with the highest degree of 
+* discrimination among the multiple feature points (corresponding to multiple key frames) of the observed map point as the descriptor of the map point.
 * pNewMP->ComputeDistinctiveDescriptors();
 * 
-* 第二个是更新该地图点平均观测方向与观测距离的范围，这些都是为了后面做描述子融合做准备。
-pNewMP->UpdateNormalAndDepth();
-
+* The second is to update the range of the average observation direction and observation distance of the map point. 
+* These are all preparations for the subsequent fusion of the descriptors.
+* pNewMP->UpdateNormalAndDepth();
+*
 * 
-* 跟踪
-* 每一帧图像 Frame ---> 提取ORB关键点特征 -----> 根据上一帧进行位置估计计算R t (或者通过全局重定位初始化位置)
-* ------> 跟踪局部地图，优化位姿 -------> 是否加入 关键帧
+* track
+* Each frame of image Frame ---> Extract ORB key point features -----> Calculate R t according to the position estimation of the previous frame (or initialize the position by global relocation)
+* ------> Track the local map and optimize the pose -------> Whether to add keyframes
 * 
-* Tracking线程
-* 帧 Frame
-* 1】初始化
-*       单目初始化 MonocularInitialization()
-*       双目初始化 StereoInitialization
+* Tracking thread
+* Frame
+* 1】initialization
+*       Monocular initialization MonocularInitialization()
+*       Binocular initialization StereoInitialization
 * 
-* 2】相机位姿跟踪P
-*       同时跟踪和定位 同时跟踪与定位，不插入关键帧，局部建图 不工作
-*       跟踪和定位分离 mbOnlyTracking(false)  
-        位姿跟踪 TrackWithMotionModel()  TrackReferenceKeyFrame()  重定位 Relocalization()
+* 2】Camera pose tracking P
+*       Simultaneous tracking and positioning Simultaneous tracking and positioning, no keyframe insertion, local mapping does not work
+*       Tracking and positioning separation mbOnlyTracking(false)  
+*        Pose tracking TrackWithMotionModel()  TrackReferenceKeyFrame()  reset Relocalization()
 *   
- a 运动模型（Tracking with motion model）跟踪   速率较快  假设物体处于匀速运动
-      用 上一帧的位姿和速度来估计当前帧的位姿使用的函数为TrackWithMotionModel()。
-      这里匹配是通过投影来与上一帧看到的地图点匹配，使用的是
-      matcher.SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, ...)。
-      
- b 关键帧模式      TrackReferenceKeyFrame()
-     当使用运动模式匹配到的特征点数较少时，就会选用关键帧模式。即尝试和最近一个关键帧去做匹配。
-     为了快速匹配，本文利用了bag of words（BoW）来加速。
-     首先，计算当前帧的BoW，并设定初始位姿为上一帧的位姿；
-     其次，根据位姿和BoW词典来寻找特征匹配，使用函数matcher.SearchByBoW(KeyFrame *pKF, Frame &F, ...)；
-     匹配到的是参考关键帧中的地图点。
-     最后，利用匹配的特征优化位姿。
-     
-c 通过全局重定位来初始化位姿估计 Relocalization() 
-    假如使用上面的方法，当前帧与最近邻关键帧的匹配也失败了，
-    那么意味着需要重新定位才能继续跟踪。
-    重定位的入口如下： bOK = Relocalization();
-    此时，只有去和所有关键帧匹配，看能否找到合适的位置。
-    首先，计算当前帧的BOW向量，在关键帧词典数据库中选取若干关键帧作为候选。
-         使用函数如下：vector<KeyFrame*> vpCandidateKFs = mpKeyFrameDB->DetectRelocalizationCandidates(&mCurrentFrame);
-    其次，寻找有足够多的特征点匹配的关键帧；最后，利用RANSAC迭代，然后使用PnP算法求解位姿。这一部分也在Tracking::Relocalization() 里
-
-    
- * 3】局部地图跟踪
-*       更新局部地图 UpdateLocalMap() 更新关键帧和 更新地图点  UpdateLocalKeyFrames()   UpdateLocalPoints
-*       搜索地图点  获得局部地图与当前帧的匹配
-*       优化位姿    最小化重投影误差  3D点-2D点对  si * pi = K * T * Pi = K * exp(f) * Pi 
+* a Tracking with motion model (Tracking with motion model) has a faster tracking rate. 
+*      Assuming that the object is in uniform motion, the pose and speed of the previous frame are used to estimate the pose of the current frame. 
+*      The function used is TrackWithMotionModel().
+*      Here the matching is done by projecting to match the map points seen in the previous frame, using
+*      matcher.SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, ...)。
+*      
+* b keyframe mode     TrackReferenceKeyFrame()
+*     When the number of feature points matched by the motion mode is small, the key frame mode is selected. That is, try to match with the most recent keyframe.
+*     For fast matching, this paper utilizes bag of words (BoW) to speed up.
+*     First, calculate the BoW of the current frame, and set the initial pose as the pose of the previous frame;
+*     Second, find feature matching according to the pose and BoW dictionary, use the function matcher.SearchByBoW(KeyFrame *pKF, Frame &F, ...);
+*     What is matched is the map point in the reference keyframe.
+*     Finally, the pose is optimized using the matched features.
+*     
+* c Initialize pose estimation via global relocalization Relocalization()
+*    If the above method is used, the matching of the current frame and the nearest neighbor keyframe also fails, 
+*    which means that relocation is required to continue tracking.
+*    The relocation entry is as follows: bOK = Relocalization();
+*    At this point, it is only necessary to match all keyframes to see if a suitable position can be found.
+*    First, the BOW vector of the current frame is calculated, and several key frames are selected as candidates in the key frame dictionary database.
+*         The function used is as follows: vector<KeyFrame*> vpCandidateKFs = mpKeyFrameDB->DetectRelocalizationCandidates(&mCurrentFrame);
+*    Second, look for keyframes with enough feature points to match; finally, use RANSAC to iterate, and then use the PnP algorithm to solve the pose. This part is also in Tracking::Relocalization()
+*
+*    
+* 3】local map tracking
+*       Update local map UpdateLocalMap() Update keyframes and update map points  UpdateLocalKeyFrames()   UpdateLocalPoints
+*       Search for map points  Get a match between the local map and the current frame
+*       Optimize the pose    Minimize reprojection error  3D point-2D point pair  si * pi = K * T * Pi = K * exp(f) * Pi 
 * 
-* 4】是否生成关键帧
-*       加入的条件：
-*       很长时间没有插入关键帧
-*       局部地图空闲
-*       跟踪快要跟丢
-*       跟踪地图 的 MapPoints 地图点 比例比较少
+* 4】whether to generate keyframes
+*       Conditions to join:
+*       No keyframes inserted for a long time
+*       Partial map is idle
+*       Tracking is about to lose
+*       The proportion of MapPoints map points of the tracking map is relatively small
 * 
-* 5】生成关键帧
+* 5】Generate keyframes
 *       KeyFrame(mCurrentFrame, mpMap, mpKeyFrameDB)
-*       对于双目 或 RGBD摄像头构造一些 MapPoints，为MapPoints添加属性
+*       Construct some MapPoints for binocular or RGBD cameras, add properties to MapPoints
 * 
-* 进入LocalMapping线程
+* Enter the LocalMapping thread
 * 
 * 
 */
