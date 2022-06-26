@@ -444,7 +444,7 @@ namespace ORB_SLAM2
 	  const Point* pattern0 = (const Point*)bit_pattern_31_;
 	  std::copy(pattern0, pattern0 + npoints, std::back_inserter(pattern));
 
-	  //This is for orientation
+	  // This is for orientation
 	  // pre-compute the end of a row in a circular patch
 	  // When used to calculate the feature direction, each v coordinate corresponds to the largest u coordinate
 	  umax.resize(HALF_PATCH_SIZE + 1);
@@ -480,7 +480,7 @@ namespace ORB_SLAM2
 	  const int halfX = ceil(static_cast<float>(UR.x-UL.x)/2);
 	  const int halfY = ceil(static_cast<float>(BR.y-UL.y)/2);
 
-	  //Define boundaries of childs
+	  // Define boundaries of childs
 	  n1.UL = UL;
 	  n1.UR = cv::Point2i(UL.x+halfX,UL.y);
 	  n1.BL = cv::Point2i(UL.x,UL.y+halfY);
@@ -505,7 +505,7 @@ namespace ORB_SLAM2
 	  n4.BR = BR;
 	  n4.vKeys.reserve(vKeys.size());
 
-	  //Associate points to childs
+	  // Associate points to childs
 	  for(size_t i=0;i<vKeys.size();i++)
 	  {
 	      const cv::KeyPoint &kp = vKeys[i];
@@ -534,7 +534,7 @@ namespace ORB_SLAM2
       }
       
       
-       //  Divide feature points into octree
+      // Divide feature points into octree
       // The next step is to divide the image into an octree form, determine the nodes of the octree according to the feature number N of this layer, 
       // and divide the features detected by this layer of images into these nodes to ensure that there is a feature in each node.
       vector<cv::KeyPoint> ORBextractor::DistributeOctTree(const vector<cv::KeyPoint>& vToDistributeKeys, const int &minX,
@@ -563,7 +563,7 @@ namespace ORB_SLAM2
 	      vpIniNodes[i] = &lNodes.back();
 	  }
 	  // [4] Assign points to child nodes
-	  //Associate points to childs
+	  // Associate points to childs
 	  for(size_t i=0;i<vToDistributeKeys.size();i++)
 	  {
 	      const cv::KeyPoint &kp = vToDistributeKeys[i];
@@ -840,7 +840,7 @@ namespace ORB_SLAM2
 
 	      vector<KeyPoint> & keypoints = allKeypoints[level];
 	      keypoints.reserve(nfeatures);
-     	      //[7] The feature points are divided into octrees, the range of the hierarchical image, and the number of hierarchical feature points.
+     	      // [7] The feature points are divided into octrees, the range of the hierarchical image, and the number of hierarchical feature points.
 	      keypoints = DistributeOctTree(vToDistributeKeys, minBorderX, maxBorderX,
 					    minBorderY, maxBorderY,mnFeaturesPerLevel[level], level);
 
@@ -973,7 +973,6 @@ namespace ORB_SLAM2
 
 
 	      // Retain by score
-
 	      while(nToDistribute>0 && nNoMore<nCells)
 	      {
 		  int nNewFeaturesCell = nfeaturesCell + ceil((float)nToDistribute/(nCells-nNoMore));
@@ -1064,7 +1063,7 @@ namespace ORB_SLAM2
 
 	  vector < vector<KeyPoint> > allKeypoints;
 	  ComputeKeyPointsOctTree(allKeypoints);
-	  //ComputeKeyPointsOld(allKeypoints);
+	  // ComputeKeyPointsOld(allKeypoints);
 
 	  Mat descriptors;
 
@@ -1104,7 +1103,7 @@ namespace ORB_SLAM2
 	      // Scale keypoint coordinates
 	      if (level != 0)
 	      {
-		  float scale = mvScaleFactor[level]; //getScale(level, firstLevel, scaleFactor);
+		  float scale = mvScaleFactor[level]; // getScale(level, firstLevel, scaleFactor);
 		  for (vector<KeyPoint>::iterator keypoint = keypoints.begin(),
 		      keypointEnd = keypoints.end(); keypoint != keypointEnd; ++keypoint)
 		      keypoint->pt *= scale;
