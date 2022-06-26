@@ -109,7 +109,6 @@ int main(int argc, char **argv)
         else
         { //reading data from device failed .set some default values....
             memset(cb_data.color_dist.data, 0, 12 * sizeof(float));
-            // 畸变参数 k1,k2,p1,p2,k3,k4,k5,k6,s1,s2,s3,s4
             memset(cb_data.color_intri.data, 0, 9 * sizeof(float));// intrinsic parameters
             cb_data.color_intri.data[0] = 1000.f;// fx
             cb_data.color_intri.data[4] = 1000.f;// fy
@@ -183,8 +182,7 @@ int main(int argc, char **argv)
 
     LOGD("=== Main done!");
 
-// 14. 保存相机轨迹Save camera track
-    // Save camera trajectory
+// 14. Save camera track
     SLAM.SaveTrajectoryTUM("my_ty_rgbd_CameraTrajectory.txt");
     //SLAM.SaveKeyFrameTrajectoryTUM("my_ty_rgbd_KeyFrameTrajectory.txt");   
 
