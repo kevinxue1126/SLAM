@@ -1209,33 +1209,33 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	    return nmatchesMap >= 10;
 	}
 
-// 更新 上一帧
-// 更新 上一帧 位姿    =  世界到 上一帧的 参考帧  再到 上一帧
-// 更新上一帧 地图点
-/**
- * @brief 双目或rgbd摄像头根据深度值为上一帧产生新的MapPoints
- *
- * 在双目和rgbd情况下，选取一些深度小一些的点（可靠一些） \n
- * 可以通过深度值产生一些新的MapPoints
- */
+	// update previous frame
+	// update previous frame pose = world to previous frame's reference frame to previous frame
+	// update previous frame map point
+	/**
+	 * @brief The binocular or rgbd camera generates new MapPoints according to the depth value of the previous frame
+	 *
+	 * In the case of binocular and rgbd, select some points with less depth (more reliable) \n
+	 * Some new MapPoints can be generated from the depth value
+	 */
 	void Tracking::UpdateLastFrame()
 	{
 	    // Update pose according to reference keyframe
-	    KeyFrame* pRef = mLastFrame.mpReferenceKF;// 参考帧
-	    cv::Mat Tlr = mlRelativeFramePoses.back();//上一帧的 参考帧 到 上一帧 的变换 Tlr
-	    mLastFrame.SetPose(Tlr*pRef->GetPose());//上一帧位姿态 =  世界到 上一帧的 参考帧  再到 上一帧
+	    KeyFrame* pRef = mLastFrame.mpReferenceKF;// reference frame
+	    cv::Mat Tlr = mlRelativeFramePoses.back();//The transform of the previous frame's reference frame to the previous frame Tlr
+	    mLastFrame.SetPose(Tlr*pRef->GetPose());//last frame pose = world to the reference frame of the previous frame to the previous frame
 
 	    if(mnLastKeyFrameId==mLastFrame.mnId || mSensor==System::MONOCULAR || !mbOnlyTracking)
 		return;
 
 	    // Create "visual odometry" MapPoints
 	    // We sort points according to their measured depth by the stereo/RGB-D sensor
-	    // 以下 双目/深度相机 执行
+	    // The following binocular/depth cameras perform
 	    vector<pair<float,int> > vDepthIdx;
 	    vDepthIdx.reserve(mLastFrame.N);
 	    for(int i=0; i<mLastFrame.N;i++)
 	    {
-		float z = mLastFrame.mvDepth[i];// 关键点对应的深度
+		float z = mLastFrame.mvDepth[i];// The depth corresponding to the key point
 		if(z>0)
 		{
 		    vDepthIdx.push_back(make_pair(z,i));
@@ -1245,7 +1245,7 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	    if(vDepthIdx.empty())
 		return;
 
-	    sort(vDepthIdx.begin(),vDepthIdx.end());//深度排序
+	    sort(vDepthIdx.begin(),vDepthIdx.end());//deep sorting
 
 	    // We insert all close points (depth < mThDepth)
 	    // If less than 100 close points, we insert the 100 closest ones.
@@ -1256,17 +1256,17 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 
 		bool bCreateNew = false;
 
-		MapPoint* pMP = mLastFrame.mvpMapPoints[i];// 上一帧对应的 地图点
+		MapPoint* pMP = mLastFrame.mvpMapPoints[i];// The map point corresponding to the previous frame
 		if(!pMP)
-		    bCreateNew = true;// 重新生成标志
-		else if(pMP->Observations()<1)// 地图点对应的观测帧 数量1个
+		    bCreateNew = true;// regenerate flag
+		else if(pMP->Observations()<1)// The number of observation frames corresponding to the map point 1
 		{
 		    bCreateNew = true;
 		}
 
-		if(bCreateNew)//重新生成 3D点
+		if(bCreateNew)//Regenerate 3D points
 		{
-		    cv::Mat x3D = mLastFrame.UnprojectStereo(i);// 生成 3D点
+		    cv::Mat x3D = mLastFrame.UnprojectStereo(i);// Generate 3D points
 		    MapPoint* pNewMP = new MapPoint(x3D,mpMap,&mLastFrame,i);
 
 		    mLastFrame.mvpMapPoints[i]=pNewMP;
@@ -1284,51 +1284,50 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	    }
 	}
 
-// 移动模式跟踪  移动前后两帧  得到 变换矩阵
-// 上一帧的地图点 反投影到当前帧图像像素坐标上  和 当前帧的 关键点落在 同一个 格子内的 
-// 做描述子匹配 搜索 可以加快匹配
-/*
- 使用匀速模型估计的位姿，将LastFrame中临时地图点投影到当前姿态，
- 在投影点附近根据描述子距离进行匹配（需要>20对匹配，否则匀速模型跟踪失败，
- 运动变化太大时会出现这种情况），然后以运动模型预测的位姿为初值，优化当前位姿，
- 优化完成后再剔除外点，若剩余的匹配依然>=10对，
- 则跟踪成功，否则跟踪失败，需要Relocalization：
- 
-  运动模型（Tracking with motion model）跟踪   速率较快  假设物体处于匀速运动
-      用 上一帧的位姿和速度来估计当前帧的位姿使用的函数为TrackWithMotionModel()。
-      这里匹配是通过投影来与上一帧看到的地图点匹配，使用的是
-      matcher.SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, ...)。
- */
-/**
- * @brief 根据匀速度模型对上一帧的MapPoints进行跟踪
- * 
- * 1. 非单目情况，需要对上一帧产生一些新的MapPoints（临时）
- * 2. 将上一帧的MapPoints投影到当前帧的图像平面上，在投影的位置进行区域匹配
- * 3. 根据匹配对估计当前帧的姿态
- * 4. 根据姿态剔除误匹配
- * @return 如果匹配数大于10，返回true
- * @see V-B Initial Pose Estimation From Previous Frame
- */
+	// Movement mode tracking Two frames before and after the movement to get the transformation matrix
+	// The map points of the previous frame are back-projected to the pixel coordinates of the current frame image and the key points of the current frame are in the same grid for descriptor matching. 
+	// Search can speed up matching.
+	/*
+	Using the pose estimated by the uniform model, project the temporary map point in the LastFrame to the current pose, 
+	and match according to the descriptor distance near the projected point (> 20 pairs of matching are required, otherwise the uniform model tracking will fail, and this will occur when the motion changes too much. 
+	If the remaining matches are still >=10 pairs, the tracking is successful, otherwise the tracking fails, and Relocalization is required:
+
+	Tracking with motion model (Tracking with motion model) The tracking rate is faster. 
+	Assume that the object is moving at a uniform speed. 
+	Use the pose and speed of the previous frame to estimate the pose of the current frame. The function used is TrackWithMotionModel().
+	The matching here is to match the map points seen in the previous frame by projection, using 
+	matcher.SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, ...)。
+	*/
+	/**
+	* @brief Track the MapPoints of the previous frame according to the uniform velocity model
+	* 
+	* 1. For non-monocular cases, some new MapPoints (temporary) need to be generated for the previous frame
+	* 2. Project the MapPoints of the previous frame onto the image plane of the current frame, and perform region matching at the projected position
+	* 3. Estimate the pose of the current frame based on the matching pair
+	* 4. Eliminate false matches based on pose
+	* @return Returns true if the number of matches is greater than 10
+	* @see V-B Initial Pose Estimation From Previous Frame
+	*/
 	bool Tracking::TrackWithMotionModel()
 	{
 	  
-	    ORBmatcher matcher(0.9,true);// 匹配点匹配器 最小距离 < 0.9*次短距离 匹配成功
+	    ORBmatcher matcher(0.9,true);// Matching point matcher Minimum distance < 0.9* short distance Matching is successful
 
 	    // Update last frame pose according to its reference keyframe
 	    // Create "visual odometry" points if in Localization Mode
-	    // 更新 上一帧 位姿    =  世界到 上一帧的 参考帧  再到 上一帧
-            // 更新上一帧 地图点
-	    UpdateLastFrame();// 
+	    // Update the previous frame pose = the world to the previous frame's reference frame and then to the previous frame
+            // Update the map point of the previous frame
+	    UpdateLastFrame();
 
 	    mCurrentFrame.SetPose(mVelocity * mLastFrame.mTcw);
-	    // 当前帧位姿 mVelocity 为当前帧和上一帧的 位姿变换
-            // 初始化空指针
+	    // The current frame pose mVelocity is the pose transformation of the current frame and the previous frame
+            // initialize null pointer
 	    fill(mCurrentFrame.mvpMapPoints.begin(),mCurrentFrame.mvpMapPoints.end(),static_cast<MapPoint*>(NULL));
 
 	    // Project points seen in previous frame
 	    int th;
 	    if(mSensor  != System::STEREO)
-		th=15;// 搜索窗口
+		th=15;// search window
 	    else
 		th=7;
 	    int nmatches = matcher.SearchByProjection(mCurrentFrame,mLastFrame,th,mSensor==System::MONOCULAR);
@@ -1352,9 +1351,9 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	    {
 		if(mCurrentFrame.mvpMapPoints[i])
 		{
-		    if(mCurrentFrame.mvbOutlier[i])//外点
+		    if(mCurrentFrame.mvbOutlier[i])//outer point
 		    {
-			MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];// 当前帧特征点 匹配到的 地图点
+			MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];// The current frame feature point matches the map point
 
 			mCurrentFrame.mvpMapPoints[i]=static_cast<MapPoint*>(NULL);
 			mCurrentFrame.mvbOutlier[i]=false;
@@ -1377,70 +1376,70 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	}
 
 	
-// 三种模式的初始跟踪之后  进行  局部地图的跟踪
-// 局部地图点的描述子 和 当前帧 特征点(还没有匹配到地图点的关键点) 进行描述子匹配
-// 图优化进行优化  利用当前帧的特征点的像素坐标和 与其匹配的3D地图点  在其原位姿上进行优化
-// 匹配优化后 成功的点对数 一般情况下 大于30 认为成功
-// 在刚进行过重定位的情况下 需要大于50 认为成功
-/*
- 以上两种仅仅完成了视觉里程计中的帧间跟踪，
- 还需要进行局部地图的跟踪，提高精度：（这其实是Local Mapping线程中干的事情）
- 局部地图跟踪TrackLocalMap()中需要
- 首先对局部地图进行更新(UpdateLocalMap)，
- 并且搜索局部地图点(SearchLocalPoint)。
- 局部地图的更新又分为
- 局部地图点(UpdateLocalPoints) 和
- 局部关键帧(UpdateLocalKeyFrames)的更新.
- 
- 为了降低复杂度，这里只是在局部图中做投影。局部地图中与当前帧有相同点的关键帧序列成为K1，
- 在covisibility graph中与K1相邻的称为K2。局部地图有一个参考关键帧Kref∈K1，
- 它与当前帧具有最多共同看到的地图云点。针对K1, K2可见的每个地图云点，
- 通过如下步骤，在当前帧中进行搜索:
- 
-（1）将地图点投影到当前帧上，如果超出图像范围，就将其舍弃；
-（2）计算当前视线方向向量v与地图点云平均视线方向向量n的夹角，舍弃n·v < cos(60°)的点云；
-（3）计算地图点到相机中心的距离d，认为[dmin, dmax]是尺度不变的区域，若d不在这个区域，就将其舍弃；
-（4）计算图像的尺度因子，为d/dmin；
-（5）将地图点的特征描述子D与还未匹配上的ORB特征进行比较，根据前面的尺度因子，找到最佳匹配。
-  这样，相机位姿就能通过匹配所有地图点，最终被优化。
-  
- */
-/**
- * @brief 对Local Map的MapPoints进行跟踪
- * 
- * 1. 更新局部地图，包括局部关键帧和关键点
- * 2. 对局部MapPoints进行投影匹配
- * 3. 根据匹配对估计当前帧的姿态
- * 4. 根据姿态剔除误匹配
- * @return true if success
- * @see V-D track Local Map
- */
+	// Following the initial tracking of the three modes, local map tracking is performed
+	// The descriptor of the local map point and the feature point of the current frame (the key point that has not yet been matched to the map point) perform descriptor matching
+	// Graph optimization to optimize using the pixel coordinates of the feature points of the current frame and the matching 3D map points to optimize on its original pose
+	// After matching optimization, the number of successful point pairs is generally greater than 30 and considered successful
+	// In the case of just relocation, it needs to be greater than 50 to be considered successful
+	/*
+	 The above two only complete the inter-frame tracking in the visual odometer, 
+	 and also need to track the local map to improve the accuracy: (This is actually what the Local Mapping thread does)
+	 Local map tracking is required in TrackLocalMap()
+	 First update the local map (UpdateLocalMap),
+	 And search the local map point (SearchLocalPoint).
+	 The update of the local map is divided into
+	 Update of local map points (UpdateLocalPoints) and 
+	 local keyframes (UpdateLocalKeyFrames).
+
+	 In order to reduce the complexity, here is just a projection on the local graph. 
+	 The key frame sequence in the local map that has the same point as the current frame is called K1, 
+	 and the key frame sequence adjacent to K1 in the covisibility graph is called K2. The local map has a reference keyframe Kref ∈ K1 which has the most co-seen map cloud points with the current frame. 
+	 For each map cloud point visible to K1 and K2, search in the current frame through the following steps:
+
+	(1) Project the map point onto the current frame, and discard it if it exceeds the image range;
+	(2) Calculate the angle between the current sight direction vector v and the average sight direction vector n of the map point cloud, and discard the point cloud with n v < cos(60°);
+	(3) Calculate the distance d from the map point to the center of the camera, and consider [dmin, dmax] to be an area with constant scale. If d is not in this area, it will be discarded;
+	(4) Calculate the scale factor of the image, which is d/dmin;
+	(5) Compare the feature descriptor D of the map point with the ORB feature that has not yet been matched, and find the best match according to the previous scale factor.
+	  In this way, the camera pose can be finally optimized by matching all map points.
+
+	 */
+	/**
+	 * @brief Track the MapPoints of the Local Map
+	 * 
+	 * 1. Update the local map, including local keyframes and keypoints
+	 * 2. Projection matching for local MapPoints
+	 * 3. Estimate the pose of the current frame based on the matching pair
+	 * 4. Eliminate false matches based on pose
+	 * @return true if success
+	 * @see V-D track Local Map
+	 */
 	bool Tracking::TrackLocalMap()
 	{
 	    // We have an estimation of the camera pose and some map points tracked in the frame.
 	    // We retrieve the local map and try to find matches to points in the local map.
-// 【1】首先对局部地图进行更新(UpdateLocalMap) 生成对应当前帧的 局部地图 
-	     // 更新局部地图(与当前帧相关的帧和地图点) 用于 局部地图点的跟踪   关键帧 + 地图点
-	     // 更新局部关键帧-------局部地图的一部分  共视化程度高的关键帧  子关键帧   父关键帧
-	     // 局部地图点的更新比较容易，完全根据 局部关键帧来，所有 局部关键帧的地图点就构成 局部地图点
+	    // [1] First, update the local map (UpdateLocalMap) to generate a local map corresponding to the current frame
+	     // Update local map (frames and map points relative to current frame) for tracking of local map points Keyframes + map points
+	     // Update local keyframes—part of the local map Keyframes with high co-visualization Subkeyframes Parent keyframes
+	     // The update of local map points is relatively easy. It is completely based on the local key frame, and all the map points of the local key frame constitute the local map point.
 	    UpdateLocalMap();
-// 【2】并且搜索局部地图点(SearchLocalPoint)
-	    // 局部地图点 搜寻和当前帧 关键点描述子 的匹配 有匹配的加入到 当前帧 特征点对应的地图点中
+	    // [2] And search for local map points (SearchLocalPoint)
+	    // The local map point is searched for matching with the current frame key point descriptor, and the matched ones are added to the map points corresponding to the current frame feature points
 	    SearchLocalPoints();
 
- // 【3】优化帧位姿 Optimize Pose
+ 	    // 【3】Optimize Pose
 	    Optimizer::PoseOptimization(&mCurrentFrame);
-	    // 优化时会更新 当前帧的位姿变换关系 同时更新地图点的内点/外点标记
+	    // During optimization, the pose transformation relationship of the current frame will be updated, and the interior/exterior markers of map points will be updated at the same time.
 	    mnMatchesInliers = 0;
 
- // 【4】更新地图点状态 Update MapPoints Statistics
+ 	    // 【4】 Update MapPoints Statistics
 	    for(int i=0; i<mCurrentFrame.N; i++)
 	    {
-		if(mCurrentFrame.mvpMapPoints[i])//特征点找到 地图点
+		if(mCurrentFrame.mvpMapPoints[i])//Feature point find map point
 		{
-		    if(!mCurrentFrame.mvbOutlier[i])//是内点 符合 变换关系
+		    if(!mCurrentFrame.mvbOutlier[i])//is the interior point conforming to the transformation relation
 		    {
-			mCurrentFrame.mvpMapPoints[i]->IncreaseFound();// 特征点找到 地图点标志
+			mCurrentFrame.mvpMapPoints[i]->IncreaseFound();// Feature point find map point sign
 			if(!mbOnlyTracking)
 			{
 			    if(mCurrentFrame.mvpMapPoints[i]->Observations() > 0)
@@ -1449,7 +1448,7 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 			else
 			    mnMatchesInliers++;
 		    }
-		    else if(mSensor == System::STEREO)// 外点 在双目下  清空匹配的地图点
+		    else if(mSensor == System::STEREO)// Outer point clears matching map points under binocular
 			mCurrentFrame.mvpMapPoints[i] = static_cast<MapPoint*>(NULL);
 		}
 	    }
@@ -1457,73 +1456,72 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	    // Decide if the tracking was succesful
 	    // More restrictive if there was a relocalization recently
 	    if(mCurrentFrame.mnId < mnLastRelocFrameId + mMaxFrames && mnMatchesInliers<50)
-		return false;//刚刚进行过重定位 则需要 匹配点对数大于 50 才认为 成功
+		return false;//If the relocation has just been performed, the number of matching point pairs is greater than 50 to be considered successful.
 
-	    if(mnMatchesInliers<30)//正常情况下  找到的匹配点对数 大于 30 算成功
+	    if(mnMatchesInliers<30)//Under normal circumstances, the number of matching point pairs found is greater than 30, which is considered successful
 		return false;
 	    else
 		return true;
    }
 	
-// 更新局部地图(与当前帧相关的帧和地图点) 用于 局部地图点的跟踪   关键帧 + 地图点
-// 更新局部关键帧-------局部地图的一部分  共视化程度高的关键帧  子关键帧   父关键帧
-// 局部地图点的更新比较容易，完全根据 局部关键帧来，所有 局部关键帧的地图点就构成 局部地图点
-/**
- * @brief 断当前帧是否为关键帧
- * @return true if needed
- */
+	// Update local map (frames and map points relative to current frame) for tracking of local map points Keyframes + map points
+	// Update local keyframes—part of the local map Keyframes with high co-visualization Subkeyframes Parent keyframes
+	// The update of local map points is relatively easy. It is completely based on the local key frame, and all the map points of the local key frame constitute the local map point.
+	/**
+	 * @brief Whether the current frame is a keyframe
+	 * @return true if needed
+	 */
 	void Tracking::UpdateLocalMap()
 	{
-	    // This is for visualization 可视化
+	    // This is for visualization
 	    mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
 
 	    // Update
-	    UpdateLocalKeyFrames();//更新关键帧
-	    UpdateLocalPoints();//更新地图点
+	    UpdateLocalKeyFrames();//update keyframes
+	    UpdateLocalPoints();//update map point
 	}
 	
-// 更新局部关键帧-------局部地图的一部分
-// 如何去选择当前帧对应的局部关键帧
- // 始终限制关键数量不超过80
- // 可以修改  这里 比较耗时
- // 但是改小 精度可能下降
-/*
- 当关键帧数量较少时(<=80)，考虑加入第二部分关键帧，
- 是与第一部分关键帧联系紧密的关键帧，并且始终限制关键数量不超过80。
- 联系紧密体现在三类：
- 1. 共视化程度高的关键帧  观测到当前帧地图点 次数多的 关键帧；
- 2. 子关键帧；
- 3. 父关键帧。
+	// Update local keyframes ------- part of the local map
+	// How to select the local keyframe corresponding to the current frame
+	 // Always limit the number of keys to no more than 80
+	 // It can be modified here, it is time-consuming
+	 // But the accuracy may decrease
+	/*
+	 When the number of keyframes is small (<=80), consider adding a second part of keyframes, 
+	 which are closely related to the first part of keyframes, and always limit the number of keys to no more than 80.
+	 The connections are closely reflected in three categories:
+	 1. Keyframes with a high degree of co-visualization are the keyframes that have observed many map points in the current frame;
+	 2. Sub keyframes;
+	 3. Parent keyframe.
 
-还有一个关键的问题是：如何判断该帧是否关键帧，以及如何将该帧转换成关键帧？
-调用
-NeedNewKeyFrame() 和
-CreateNewKeyFrame()  两个函数来完成。
- */
-/**
- * @brief 更新局部关键帧，called by UpdateLocalMap()
- *
- * 遍历当前帧的MapPoints，将观测到这些MapPoints的关键帧和相邻的关键帧取出，更新mvpLocalKeyFrames
- */
+
+	transfer
+	NeedNewKeyFrame() and 
+	CreateNewKeyFrame()  two functions to complete.
+	 */
+	/**
+	 * @brief Update local keyframes，called by UpdateLocalMap()
+	 *
+	 * Traverse the MapPoints of the current frame, take out the keyframes and adjacent keyframes where these MapPoints are observed, and update mvpLocalKeyFrames
+	 */
      void Tracking::UpdateLocalKeyFrames()
 	{
 	    // Each map point vote for the keyframes in which it has been observed
-	  // 更新地图点 的 观测帧
 	    map<KeyFrame*,int> keyframeCounter;
 	    for(int i=0; i<mCurrentFrame.N; i++)
 	    {
-		if(mCurrentFrame.mvpMapPoints[i])//当前帧 的地图点
+		if(mCurrentFrame.mvpMapPoints[i])//map point for the current frame
 		{
 		    MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];
-		    if(!pMP->isBad())// 被观测到
+		    if(!pMP->isBad())// observed
 		    {
 			const map<KeyFrame*,size_t> observations = pMP->GetObservations();
 			for(map<KeyFrame*,size_t>::const_iterator it=observations.begin(), itend=observations.end(); it!=itend; it++)
-			    keyframeCounter[it->first]++;// 地图点的观测帧 观测地图点次数++
+			    keyframeCounter[it->first]++;// Observation frame of the map point Number of times to observe the map point++
 		    }
 		    else
 		    {
-			mCurrentFrame.mvpMapPoints[i]=NULL;//未观测到  地图点清除
+			mCurrentFrame.mvpMapPoints[i]=NULL;//Not observed Map point clear
 		    }
 		}
 	    }
@@ -1534,24 +1532,24 @@ CreateNewKeyFrame()  两个函数来完成。
 	    int max=0;
 	    KeyFrame* pKFmax= static_cast<KeyFrame*>(NULL);
 
-	    mvpLocalKeyFrames.clear();// 局部关键帧清空
+	    mvpLocalKeyFrames.clear();// Local keyframe clear
 	    mvpLocalKeyFrames.reserve(3*keyframeCounter.size());
 
 	    // All keyframes that observe a map point are included in the local map. Also check which keyframe shares most points
 	    // map<KeyFrame*,int>::const_iterator
-//  1. 共视化程度高的关键帧 观测到当前帧地图点 次数多的 关键帧；	    
+	    //  1. Keyframes with a high degree of co-visualization are the keyframes that have observed many map points in the current frame;	    
 	    for( auto it=keyframeCounter.begin(), itEnd=keyframeCounter.end(); it!=itEnd; it++)
 	    {
-		KeyFrame* pKF = it->first;//地图点的 关键帧
+		KeyFrame* pKF = it->first;//keyframes for map points
 
 		if(pKF->isBad())
 		    continue;
-		if(it->second > max)// 观测到 地图点数量最多的 关键帧
+		if(it->second > max)// The keyframe with the most map points observed
 		{
 		    max = it->second;
 		    pKFmax=pKF;
 		}
-		mvpLocalKeyFrames.push_back(it->first);// 保存 局部关键帧
+		mvpLocalKeyFrames.push_back(it->first);// Save local keyframes
 		pKF->mnTrackReferenceForFrame = mCurrentFrame.mnId;
 	    }
 
@@ -1561,7 +1559,7 @@ CreateNewKeyFrame()  两个函数来完成。
 	    for(auto itKF=mvpLocalKeyFrames.begin(), itEndKF=mvpLocalKeyFrames.end(); itKF!=itEndKF; itKF++)
 	    {
 		// Limit the number of keyframes
-       // 始终限制关键数量不超过80
+       		// Always limit the number of keys to no more than 80
 		if(mvpLocalKeyFrames.size()>80)
 		    break;
 
