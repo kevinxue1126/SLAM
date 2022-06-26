@@ -1204,77 +1204,75 @@ namespace ORB_SLAM2
 		// Depth must be positive
 		if(p3Dc.at<float>(2)<0.0f)
 		    continue;
-		// Project into Image 投影到像素平面
+		// Project into Image 
 		const float invz = 1.0/p3Dc.at<float>(2);
 		const float x = p3Dc.at<float>(0)*invz;
 		const float y = p3Dc.at<float>(1)*invz;
 		const float u = fx*x+cx;
 		const float v = fy*y+cy;
 		// Point must be inside the image
-		if(!pKF->IsInImage(u,v))// 不在图像内 跳过
+		if(!pKF->IsInImage(u,v))
 		    continue;
-	//步骤4：  判断距离是否在尺度协方差范围内
+		// Step 4: Determine whether the distance is within the scale covariance range
 		const float maxDistance = pMP->GetMaxDistanceInvariance();
 		const float minDistance = pMP->GetMinDistanceInvariance();
 		cv::Mat PO = p3Dw-Ow;
-		//地图点 距离相机的距离 进而推断 在图像金字塔中可能的尺度 越远尺度小 越近尺度大
+		//The distance between the map point and the camera, and then infer the possible scale in the image pyramid. The farther the scale is, the smaller the scale is, and the closer the scale is.
 		const float dist3D = cv::norm(PO);
 		// Depth must be inside the scale pyramid of the image
 		if(dist3D<minDistance || dist3D>maxDistance )
-		    continue;//  剔除
+		    continue;//  cull
 
-	//步骤5：观察视角 必须小于 60度  Viewing angle must be less than 60 deg
+		// Step 5： Viewing angle must be less than 60 deg
 		cv::Mat Pn = pMP->GetNormal();
 		if(PO.dot(Pn)<0.5*dist3D)
 		    continue;
-		// 根据深度 预测 地图点 在 帧 图像上 的尺度   深度大尺度小  深度小尺度大
+		// Predict the scale of the map point on the frame image according to the depth, the large scale of the depth is small, and the small scale of the depth is large.
 		int nPredictedLevel = pMP->PredictScale(dist3D,pKF);
-	// 步骤6： 根据尺度确定搜索半径 进而在图像上确定 候选 关键点	
+		// Step 6: Determine the search radius according to the scale, and then determine the candidate key points on the image
 		const float radius = th*pKF->mvScaleFactors[nPredictedLevel];
 		const vector<size_t> vIndices = pKF->GetFeaturesInArea(u,v,radius);
 		if(vIndices.empty())
 		    continue;
 
-//  步骤7：遍历候选关键点  计算与地图点  描述子匹配 计算距离 保留最近距离的匹配
-		// Match to the most similar keypoint in the radius
-		const cv::Mat dMP = pMP->GetDescriptor();// 地图点 对应的 描述子
+		// Step 7: Match to the most similar keypoint in the radius
+		const cv::Mat dMP = pMP->GetDescriptor();
 		int bestDist = INT_MAX;
 		int bestIdx = -1;
 		// vector<size_t>::const_iterator
 		for(auto vit=vIndices.begin(); vit!=vIndices.end(); vit++)
 		{
 		    const size_t idx = *vit;
-		    //  关键点的尺度 需要在 预测尺度 之上
+		    //  The scale of the keypoints needs to be above the prediction scale
 		    const int &kpLevel = pKF->mvKeysUn[idx].octave;
 		    if(kpLevel<nPredictedLevel-1 || kpLevel>nPredictedLevel)
-			continue;// 不符合的 跳过
+			continue;// Incompatible continue
 			
-// 步骤8：计算地图点和 关键帧 特征点 描述子之间的距离 选出最近距离的 关键点
-		    const cv::Mat &dKF = pKF->mDescriptors.row(idx);// 关键点描述子
-		    int dist = DescriptorDistance(dMP,dKF);// 地图点 对应的 描述子 和  关键点描述子 之间的 汉明匹配距离
-		    if(dist<bestDist)// 最近的距离
+		    // Step 8: Calculate the distance between map points and key frame feature points, describe the distance between them, and select the key points with the closest distance
+		    const cv::Mat &dKF = pKF->mDescriptors.row(idx);// keypoint descriptor
+		    int dist = DescriptorDistance(dMP,dKF);// Hamming matching distance between the descriptor corresponding to the map point and the keypoint descriptor
+		    if(dist<bestDist)// the closest distance
 		    {
 			bestDist = dist;
-			bestIdx = idx;// 对应的 描述子的 下标
+			bestIdx = idx;// the subscript of the corresponding descriptor
 		    }
 		}
 
-		// 找到了地图点MapPoint在该区域最佳匹配的特征点        
-		if(bestDist<=TH_LOW)// 距离<50
+		// Find the best matching feature point of the map point MapPoint in this area       
+		if(bestDist<=TH_LOW)// Distance<50
 		{
 		    MapPoint* pMPinKF = pKF->GetMapPoint(bestIdx);
-// 步骤10： 如果MapPoint能匹配关键帧的特征点，并且该特征点有对应的MapPoint，
+		    // Step 9: If the MapPoint can match the feature point of the key frame, and the feature point has a corresponding MapPoint
 		    if(pMPinKF)
 		    {
 			if(!pMPinKF->isBad())
-			    vpReplacePoint[iMP] = pMPinKF;// 用关键点对应的地图点 替换 原地图点
+			    vpReplacePoint[iMP] = pMPinKF;// Replace the original map point with the map point corresponding to the key point
 		    }
-// 步骤11：  如果MapPoint能匹配关键帧的特征点，并且该特征点没有对应的MapPoint，那么为该特征点点添加地图点MapPoint           
-		  //    关键帧  特征点 还没有匹配的地图点  把匹配到的地图点 对应上去		    
+		    // Step 10: If the MapPoint can match the feature point of the key frame, and the feature point does not have a corresponding MapPoint, then add a map point MapPoint for the feature point		    
 		    else
 		    {
-			pMP->AddObservation(pKF,bestIdx);// pMP 地图点 观测到了 帧pKF 上第 bestIdx 个 特征点
-			pKF->AddMapPoint(pMP,bestIdx);// 帧 的 第 bestIdx 个 特征点 对应pMP地图点		      
+			pMP->AddObservation(pKF,bestIdx);// The pMP map point observes the bestIdx-th feature point on frame pKF
+			pKF->AddMapPoint(pMP,bestIdx);// The bestIdx feature point of the frame corresponds to the pMP map point		      
 		    }
 		    nFused++;
 		}
@@ -1283,132 +1281,128 @@ namespace ORB_SLAM2
 	    return nFused;
 	}
 	
-  /**
-  * @brief  通过Sim3变换，确定pKF1的特征点在pKF2中的大致区域，
-  * 同理，确定pKF2的特征点在pKF1中的大致区域
-  * 在该区域内通过描述子进行匹配捕获pKF1和pKF2之前漏匹配的特征点，
-  * 更新vpMatches12（之前使用SearchByBoW进行特征点匹配时会有漏匹配）
-  * @param pKF1          关键帧1
-  * @param pKF2          关键帧2
-  * @param vpMatches12   两帧原有匹配点  帧1 特征点 匹配到 帧2 的地图点
-  * @param s12              帧2->帧1 相似变换 尺度
-  * @param R12             帧2->帧1  欧式变换 旋转矩阵
-  * @param t12              帧2->帧1 欧式变换 平移向量
-  * @param th       		 搜索半径参数
-  * @return                     成功匹配的数量
-  */
+	  /**
+	  * @brief  Through Sim3 transformation, determine the approximate area of pKF1's feature points in pKF2. Similarly, 
+	  * determine the approximate area of pKF2's feature points in pKF1, 
+	  * and use the descriptor to match in this area to capture the missing matching feature points before pKF1 and pKF2, 
+	  * Update vpMatches12 (there will be missing matches when using SearchByBoW for feature point matching before)
+	  * @param pKF1             keyframe 1
+	  * @param pKF2             keyframe 2
+	  * @param vpMatches12      Two frames of original matching points, the feature points of frame 1 are matched to the map points of frame 2
+	  * @param s12              Frame 2 -> Frame 1 Similarity Transformation Scale
+	  * @param R12              Frame 2->Frame 1 Euclidean Transformation Rotation Matrix
+	  * @param t12              Frame 2 -> Frame 1 Euclidean Transform Translation Vector
+	  * @param th               Search radius parameter
+	  * @return                 Number of successful matches
+	  */
 	int ORBmatcher::SearchBySim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint*> &vpMatches12,
 				    const float &s12, const cv::Mat &R12, const cv::Mat &t12, const float th)
 	{
 	  
-// 步骤1：变量初始化----------------------------------------------------- 
-	  //相机内参数
+	    // Step 1: Variable initialization
 	    const float &fx = pKF1->fx;
 	    const float &fy = pKF1->fy;
 	    const float &cx = pKF1->cx;
 	    const float &cy = pKF1->cy;
 	    
-	    // 世界坐标系 到 帧1 的 欧式变换 Camera 1 from world
+	    // Camera 1 from world
 	    cv::Mat R1w = pKF1->GetRotation();
 	    cv::Mat t1w = pKF1->GetTranslation();
 	    
-	   // 世界坐标系 到 帧2 的 欧式变换 Camera 2 from world
+	    // Camera 2 from world
 	    cv::Mat R2w = pKF2->GetRotation();
 	    cv::Mat t2w = pKF2->GetTranslation();
 
 	    //Transformation between cameras
-	    // 相似变换 旋转矩阵 平移向量
-	    cv::Mat sR12 = s12*R12;// 帧2->帧1 相似变换旋转矩阵 = 帧2->帧1相似变换尺度 * 帧2->帧1欧式变换旋转矩阵
-	    cv::Mat sR21 = (1.0/s12)*R12.t();// 帧1->帧2相似变换旋转矩阵 = 帧1->帧2相似变换尺度 * 帧1->帧2欧式变换旋转矩阵
-	    cv::Mat t21 = -sR21*t12;// 帧1->帧2相似变换 平移向量
+	    cv::Mat sR12 = s12*R12;
+	    cv::Mat sR21 = (1.0/s12)*R12.t();
+	    cv::Mat t21 = -sR21*t12;
 	    
-            // 帧1地图点数量  关键点数量 
+            // Number of map points in frame 1 Number of key points
 	    const vector<MapPoint*> vpMapPoints1 = pKF1->GetMapPointMatches();
 	    const int N1 = vpMapPoints1.size();
-            // 帧2地图点数量 关键点数量
+            // Number of map points in frame 2 Number of key points
 	    const vector<MapPoint*> vpMapPoints2 = pKF2->GetMapPointMatches();
 	    const int N2 = vpMapPoints2.size();
 
-	    // 来源于 两帧 先前 已有的 匹配
-	    vector<bool> vbAlreadyMatched1(N1,false);// 帧1 在帧2中 是否有 匹配
-	    vector<bool> vbAlreadyMatched2(N2,false);// 帧2 在帧1中 是否有 匹配
+	    // Derived from a previously existing match between two frames
+	    vector<bool> vbAlreadyMatched1(N1,false);
+	    vector<bool> vbAlreadyMatched2(N2,false);
 	    
-// 步骤2：用vpMatches12更新 已有的匹配 vbAlreadyMatched1和vbAlreadyMatched2------------------------------------
+	    // Step 2: Update existing matches with vpMatches12 vbAlreadyMatched1和vbAlreadyMatched2
 	    for(int i=0; i<N1; i++)
 	    {
-	        MapPoint* pMP = vpMatches12[i];// 帧1 特征点 匹配到 帧2 的地图点
-		if(pMP)// 存在
+	        MapPoint* pMP = vpMatches12[i];// The feature point of frame 1 matches the map point of frame 2
+		if(pMP)// exist
 		{
-		    vbAlreadyMatched1[i]=true;//  帧1 特征点  已经有匹配到的 地图点了
-		    int idx2 = pMP->GetIndexInKeyFrame(pKF2);//  帧2 的地图点 在帧2中对应的 下标
-		    if(idx2>=0 && idx2<N2)// 在 帧2特征点个数范围内的话
-			vbAlreadyMatched2[idx2]=true;// 帧2 地图点 在 帧1中也已经有匹配
+		    vbAlreadyMatched1[i]=true;// Frame 1 Feature point There are already matched map points
+		    int idx2 = pMP->GetIndexInKeyFrame(pKF2);//  The corresponding subscript of the map point of frame 2 in frame 2
+		    if(idx2>=0 && idx2<N2)// If the number of feature points in frame 2 is within the range
+			vbAlreadyMatched2[idx2]=true;// Frame 2 map point already has a match in frame 1
 		}
 	    }
 	    
-	    // 新寻找的匹配
+	    // newly found match
 	    vector<int> vnMatch1(N1,-1);
 	    vector<int> vnMatch2(N2,-1);
-// 步骤3：通过Sim变换，确定pKF1的地图点在pKF2帧图像中的大致区域，
-	    //         在该区域内通过描述子进行匹配捕获pKF1和pKF2之前漏匹配的特征点，更新vpMatches12
-	    //         （之前使用SearchByBoW进行特征点匹配时会有漏匹配）
-	    // 每一个帧1中的地图点 投影到 帧2 上
+	    // Step 3: Determine the approximate area of the map points of pKF1 in the pKF2 frame image through Sim transformation, 
+	    // use the descriptor in this area to match the feature points that were missed before pKF1 and pKF2, 
+	    // and update vpMatches12 (Use SearchByBoW to perform feature points before 
+            // There will be missing matches when matching) each map point in frame 1 is projected on frame 2
 	    for(int i1=0; i1<N1; i1++)
 	    {
-       //步骤3.1： 跳过已有的匹配 和 不存在的点 以及坏点 
+      		// Step 3.1: Skip existing matches and non-existing points and dead points
 		MapPoint* pMP = vpMapPoints1[i1];
 		if(!pMP || vbAlreadyMatched1[i1])
-		    continue;// 点不存在 已经匹配过了 直接跳过
+		    continue;// If the point does not exist, it has been matched and skipped directly
 		if(pMP->isBad())
-		    continue;// 坏点跳过               SE3						Sim3
-       //步骤3.2： 帧1地图点(世界坐标系)-------> 帧1地图点(帧1坐标系)-------> 帧1地图点(帧2坐标系)---->帧2像素坐标系下
-		// 帧1  pKF1 地图点在世界坐标系中的点坐标  
-		cv::Mat p3Dw = pMP->GetWorldPos();// 帧1地图点(世界坐标系)
-		// 帧1   pKF1 地图点在帧1 坐标系下的点坐标
-		cv::Mat p3Dc1 = R1w*p3Dw + t1w;// 帧1地图点(帧1坐标系)
-		//  帧1   pKF1 地图点在帧1 坐标系下的点坐标 通过帧1到帧2的相似变换 变换到 帧2坐标系下
-		cv::Mat p3Dc2 = sR21*p3Dc1 + t21;// 帧1地图点(帧2坐标系)
-		// Depth must be positive
-		if(p3Dc2.at<float>(2)<0.0)// 深度值必须为正 相机前方
 		    continue;
-		// 投影到 帧2 像素平面上
+       		//Step 3.2: Frame 1 Map Point (World Coordinate System)-------> Frame 1 Map Point (Frame 1 Coordinate System)-------> Frame 1 Map Point (Frame 2 Coordinate System)-- -->Frame 2 pixel coordinate system
+		cv::Mat p3Dw = pMP->GetWorldPos();
+		// Frame 1 pKF1 The point coordinates of the map point in the frame 1 coordinate system
+		cv::Mat p3Dc1 = R1w*p3Dw + t1w;
+		//  Frame 1 pKF1 The point coordinates of the map point in the frame 1 coordinate system are transformed to the frame 2 coordinate system through the similar transformation from frame 1 to frame 2
+		cv::Mat p3Dc2 = sR21*p3Dc1 + t21;
+		// Depth must be positive
+		if(p3Dc2.at<float>(2)<0.0)
+		    continue;
+		// Projected onto the frame 2 pixel plane
 		const float invz = 1.0/p3Dc2.at<float>(2);
 		const float x = p3Dc2.at<float>(0)*invz;
 		const float y = p3Dc2.at<float>(1)*invz;
 		const float u = fx*x+cx;
 		const float v = fy*y+cy;
 		// Point must be inside the image
-		if(!pKF2->IsInImage(u,v))// 坐标必须在 图像平面尺寸内
+		if(!pKF2->IsInImage(u,v))
 		    continue;
 		
-       //步骤3.3：  判断帧1地图点距帧2的距离 是否在尺度协方差范围内
+       		//Step 3.3: Determine whether the distance between the map point of frame 1 and frame 2 is within the range of scale covariance
 		const float maxDistance = pMP->GetMaxDistanceInvariance();
 		const float minDistance = pMP->GetMinDistanceInvariance();
 		const float dist3D = cv::norm(p3Dc2);
 		// Depth must be inside the scale pyramid of the image
 		if(dist3D<minDistance || dist3D>maxDistance )
-		    continue;//  剔除
+		    continue;// cull
 		    
-       // 步骤3.4： 根据深度确定尺度 再根据 尺度确定搜索半径 进而在图像上确定 候选 关键点		    
-		// Compute predicted octave 根据深度 预测 地图点 在 帧 图像上 的尺度   深度大尺度小  深度小尺度大
-		const int nPredictedLevel = pMP->PredictScale(dist3D,pKF2);// 尺度 也就是在 金字塔哪一层
+       		// Step 3.4: Determine the scale according to the depth, and then determine the search radius according to the scale, and then determine the candidate key points on the image		    
+		// Compute predicted octave 
+		const int nPredictedLevel = pMP->PredictScale(dist3D,pKF2);// The scale is at which level of the pyramid
 		// Search in a radius
-		const float radius = th*pKF2->mvScaleFactors[nPredictedLevel];// 再根据 尺度确定搜索半径
-		const vector<size_t> vIndices = pKF2->GetFeaturesInArea(u,v,radius);//进而在图像上确定 候选 关键点	
+		const float radius = th*pKF2->mvScaleFactors[nPredictedLevel];// Then determine the search radius according to the scale
+		const vector<size_t> vIndices = pKF2->GetFeaturesInArea(u,v,radius);//Then determine candidate keypoints on the image	
 		if(vIndices.empty())
 		    continue;
-       // 步骤3.5：遍历候选关键点  计算与地图点  描述子匹配 计算距离 保留最近距离的匹配
-		// Match to the most similar keypoint in the radius
-		const cv::Mat dMP = pMP->GetDescriptor();// 帧1 地图点 描述子 
+		// Step 3.5: Match to the most similar keypoint in the radius
+		const cv::Mat dMP = pMP->GetDescriptor();// Frame 1 map point descriptor
 		int bestDist = INT_MAX;
 		int bestIdx = -1;
-		// 遍历搜索 帧2区域内的所有特征点，与帧1地图点pMP进行描述子匹配
+		// Traverse all feature points in the search frame 2 area, and perform descriptor matching with the map point pMP of frame 1
 		// vector<size_t>::const_iterator
 		for(auto  vit=vIndices.begin(), vend=vIndices.end(); vit!=vend; vit++)
 		{
 		    const size_t idx = *vit;
-		   //  关键点的尺度 需要在 预测尺度nPredictedLevel 之上
-		    const cv::KeyPoint &kp = pKF2->mvKeysUn[idx];// 帧2候选区域内的 关键点
+		   //  The scale of key points needs to be above the predicted scale nPredictedLevel
+		    const cv::KeyPoint &kp = pKF2->mvKeysUn[idx];// Keypoints within the candidate region of frame 2
 		    if(kp.octave<nPredictedLevel-1 || kp.octave>nPredictedLevel)
 			continue;
 		   // Frame 2 Keypoint Descriptor
