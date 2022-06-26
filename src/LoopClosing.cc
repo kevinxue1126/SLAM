@@ -271,32 +271,32 @@ namespace ORB_SLAM2
       }
       
 
-/**
- * @brief Calculate the Sim3 transform of the current frame and the closed-loop frame, etc.
- *
- * 1. Accelerate the matching of descriptors through Bow, and use RANSAC to roughly calculate the Sim3 of the current frame and the closed-loop frame (current frame---closed-loop frame)
- * 2. According to the estimated Sim3, project the 3D points to find more matches, and calculate the more accurate Sim3 by the optimized method (current frame---closed loop frame)
- * 3. Match the MapPoints of the closed-loop frame and the keyframes connected to the closed-loop frame with the points of the current frame (current frame---closed-loop frame + connected keyframe)
- * 
- * Note that the above matching results are all stored in the member variable mvpCurrentMatchedPoints. 
- * For the actual update steps, see CorrectLoop() Step 3: Start Loop Fusion
- * 
- * 
- * Step 1: Traverse each closed-loop candidate keyframe and construct a sim3 solver
- * Step 2: Take a key frame pKF from the screened closed-loop candidate frames
- * Step 3: Match the current frame mpCurrentKF with the closed-loop candidate key frame pKF to obtain matching point pairs
- *    Step 3.1 Skip candidate closed-loop frames with few matching point pairs
- *    Step 3.2: Construct Sim3 solver from matching point pairs
- * Step 4: Iterate each candidate closed-loop key frame Sim3, use the similarity transformation solver to solve, and the similarity transformation from the candidate closed-loop key frame to the schedule frame
- * Step 5: Through the Sim3 transformation obtained in Step 4, use the sim3 transformation to match to obtain more matching points to make up for the missing matching in Step 3
- * Step 6: G2O Sim3 optimization, as long as there is a candidate frame through the solution and optimization of Sim3, it will jump out and stop the judgment of other candidate frames
- * Step 7: If there is no closed-loop matching candidate frame through the solution and optimization of Sim3, clear the candidate closed-loop key frame
- * Step 8: Take out the connected keyframes that match the keyframes in the closed loop, get their map points MapPoints and put them into mvpLoopMapPoints
- * Step 9: Match the closed loop on the key frame and the map points MapPoints of the connected key frame, project it to the current key frame for projection matching, and find more matches for the current frame
- * Step 10: Determine whether the current frame matches all the detected closed-loop keyframes with enough MapPoints	
- * Step 11: Satisfy the number of matching points > 40, find success, clear mvpEnoughConsistentCandidates
- * @return  The calculation is successful and returns true
- */
+	/**
+	 * @brief Calculate the Sim3 transform of the current frame and the closed-loop frame, etc.
+	 *
+	 * 1. Accelerate the matching of descriptors through Bow, and use RANSAC to roughly calculate the Sim3 of the current frame and the closed-loop frame (current frame---closed-loop frame)
+	 * 2. According to the estimated Sim3, project the 3D points to find more matches, and calculate the more accurate Sim3 by the optimized method (current frame---closed loop frame)
+	 * 3. Match the MapPoints of the closed-loop frame and the keyframes connected to the closed-loop frame with the points of the current frame (current frame---closed-loop frame + connected keyframe)
+	 * 
+	 * Note that the above matching results are all stored in the member variable mvpCurrentMatchedPoints. 
+	 * For the actual update steps, see CorrectLoop() Step 3: Start Loop Fusion
+	 * 
+	 * 
+	 * Step 1: Traverse each closed-loop candidate keyframe and construct a sim3 solver
+	 * Step 2: Take a key frame pKF from the screened closed-loop candidate frames
+	 * Step 3: Match the current frame mpCurrentKF with the closed-loop candidate key frame pKF to obtain matching point pairs
+	 *    Step 3.1 Skip candidate closed-loop frames with few matching point pairs
+	 *    Step 3.2: Construct Sim3 solver from matching point pairs
+	 * Step 4: Iterate each candidate closed-loop key frame Sim3, use the similarity transformation solver to solve, and the similarity transformation from the candidate closed-loop key frame to the schedule frame
+	 * Step 5: Through the Sim3 transformation obtained in Step 4, use the sim3 transformation to match to obtain more matching points to make up for the missing matching in Step 3
+	 * Step 6: G2O Sim3 optimization, as long as there is a candidate frame through the solution and optimization of Sim3, it will jump out and stop the judgment of other candidate frames
+	 * Step 7: If there is no closed-loop matching candidate frame through the solution and optimization of Sim3, clear the candidate closed-loop key frame
+	 * Step 8: Take out the connected keyframes that match the keyframes in the closed loop, get their map points MapPoints and put them into mvpLoopMapPoints
+	 * Step 9: Match the closed loop on the key frame and the map points MapPoints of the connected key frame, project it to the current key frame for projection matching, and find more matches for the current frame
+	 * Step 10: Determine whether the current frame matches all the detected closed-loop keyframes with enough MapPoints	
+	 * Step 11: Satisfy the number of matching points > 40, find success, clear mvpEnoughConsistentCandidates
+	 * @return  The calculation is successful and returns true
+	 */
       bool LoopClosing::ComputeSim3()
       {
 	  // For each consistent loop candidate we try to compute a Sim3
@@ -468,8 +468,8 @@ namespace ORB_SLAM2
 		  {
 		      if(!pMP->isBad() && pMP->mnLoopPointForKF != mpCurrentKF->mnId)
 		      {
-			  mvpLoopMapPoints.push_back(pMP);// 闭环地图点 加入该点
-			  // 标记该MapPoint被mpCurrentKF闭环时观测到并添加，避免重复添加
+			  mvpLoopMapPoints.push_back(pMP);// Closed-loop map point, join the point
+			  // Mark the MapPoint to be observed and added when it is closed by mpCurrentKF to avoid repeated additions
 			  pMP->mnLoopPointForKF = mpCurrentKF->mnId;
 		      }
 		  }
@@ -514,42 +514,46 @@ namespace ORB_SLAM2
 
       
  
-/**
- * @brief 闭环融合 全局优化
- *
- * 1. 通过求解的Sim3以及相对姿态关系，调整与 当前帧相连的关键帧 mvpCurrentConnectedKFs 位姿 
- *      以及这些 关键帧观测到的MapPoints的位置（相连关键帧---当前帧）
- * 2. 用当前帧在闭环地图点 mvpLoopMapPoints 中匹配的 当前帧闭环匹配地图点 mvpCurrentMatchedPoints  
- *     更新当前帧 之前的 匹配地图点 mpCurrentKF->GetMapPoint(i)
- * 2. 将闭环帧以及闭环帧相连的关键帧的 所有地图点 mvpLoopMapPoints 和  当前帧相连的关键帧的点进行匹配 
- * 3. 通过MapPoints的匹配关系更新这些帧之间的连接关系，即更新covisibility graph
- * 4. 对Essential Graph（Pose Graph）进行优化，MapPoints的位置则根据优化后的位姿做相对应的调整
- * 5. 创建线程进行全局Bundle Adjustment
- * 
- * mvpCurrentConnectedKFs    当前帧相关联的关键帧
- * vpLoopConnectedKFs            闭环帧相关联的关键帧        这些关键帧的地图点 闭环地图点 mvpLoopMapPoints
- * mpMatchedKF                        与当前帧匹配的  闭环帧
- * 
- * mpCurrentKF 当前关键帧    优化的位姿 mg2oScw     原先的地图点 mpCurrentKF->GetMapPoint(i)
- * mvpCurrentMatchedPoints  当前帧在闭环地图点中匹配的地图点  当前帧闭环匹配地图点 
- * 
- */ 
+	/**
+	 * @brief closed loop fusion， global optimization
+	 *
+	 * Through the solved Sim3, and the relative attitude relationship. 
+	 * Adjust the pose of the keyframe mvpCurrentConnectedKFs connected to the current frame, 
+	 * and the position of the MapPoints observed by these keyframes (connected keyframe---current frame)
+	 *      
+	 * Use the current frame to match in the closed-loop map point mvpLoopMapPoints, 
+	 *  the current frame closed-loop matching map point mvpCurrentMatchedPoints, 
+	 *  update the current frame, the previous matching map point mpCurrentKF->GetMapPoint(i)
+	 *     
+	 * 2. Match the closed-loop frame and the keyframes connected to the closed-loop frame, all map points mvpLoopMapPoints and the points of the keyframe connected to the current frame.
+	 * 3. Update the connection relationship between these frames through the matching relationship of MapPoints, that is, update the covisibility graph
+	 * 4. Optimize the Essential Graph (Pose Graph), and adjust the position of MapPoints according to the optimized pose
+	 * 5. Create a thread for global Bundle Adjustment
+	 * 
+	 * mvpCurrentConnectedKFs    keyframe associated with the current frame
+	 * vpLoopConnectedKFs        Keyframes associated with closed loop frames
+	 * mpMatchedKF               Closed-loop frame that matches the current frame
+	 * 
+	 * mpCurrentKF current keyframe, Optimized pose mg2oScw, the original map point mpCurrentKF->GetMapPoint(i)
+	 * mvpCurrentMatchedPoints  The map point that the current frame matches in the closed-loop map point, the current frame's closed-loop matching map point
+	 * 
+	 */ 
       void LoopClosing::CorrectLoop()
       {
 	  cout << "检测到闭环 Loop detected!" << endl;
 
 	  // Send a stop signal to Local Mapping
 	  // Avoid new keyframes are inserted while correcting the loop
-// 步骤0：请求局部地图停止，防止局部地图线程中InsertKeyFrame函数插入新的关键帧	  
+	  // Step 0: Request the local map to stop to prevent the InsertKeyFrame function from inserting a new keyframe in the local map thread	  
 	  mpLocalMapper->RequestStop();
 
 	  // If a Global Bundle Adjustment is running, abort it
-// 步骤1：停止全局优化  
+	  // Step 1: Stop Global Optimization 
 	  if(isRunningGBA())
 	  {
 	      unique_lock<mutex> lock(mMutexGBA);
-	      // 这个标志位仅用于控制输出提示，可忽略
-	      mbStopGBA = true;//停止全局优化 
+	      // This flag is only used to control the output prompt and can be ignored
+	      mbStopGBA = true; 
 
 	      mnFullBAIdx++;
 
@@ -560,53 +564,51 @@ namespace ORB_SLAM2
 	      }
 	  }
 	  
-// 步骤2：等待 局部建图线程 完全停止
-	  // Wait until Local Mapping has effectively stopped
+	  // Step 2: Wait until Local Mapping has effectively stopped
 	  while(!mpLocalMapper->isStopped())
 	  {
 	      usleep(1000);
 	  }
 	  
- // 步骤3：根据共视关系更新当前帧与其它关键帧之间的连接
-	  // Ensure current keyframe is updated
+	  // Step 3: Ensure current keyframe is updated
 	  mpCurrentKF->UpdateConnections();
 	  
-// 步骤4：通过位姿传播，得到Sim3优化后，与当前帧相连的关键帧的位姿，以及它们的MapPoints
-	  // 当前帧与世界坐标系之间的Sim变换在ComputeSim3函数中已经确定并优化，
-	  // 通过相对位姿关系，可以确定这些相连的关键帧与世界坐标系之间的Sim3变换
+	  // Step 4: Through the pose propagation, get the poses of the keyframes connected to the current frame after Sim3 optimization, and their MapPoints
+	  // The Sim transformation between the current frame and the world coordinate system has been determined and optimized in the ComputeSim3 function. 
+	  // Through the relative pose relationship, the Sim3 transformation between these connected keyframes and the world coordinate system can be determined
 	  // Retrive keyframes connected to the current keyframe and compute corrected Sim3 pose by propagation
-	  mvpCurrentConnectedKFs = mpCurrentKF->GetVectorCovisibleKeyFrames();//当前帧 的 相连 关键帧
-	  mvpCurrentConnectedKFs.push_back(mpCurrentKF);//也加入自己
-        // 先将 当前帧 mpCurrentKF 的Sim3变换存入，固定不动
-	  KeyFrameAndPose CorrectedSim3, NonCorrectedSim3;// 得到闭环g2o优化后各个关键帧的位姿 没有优化的位姿 
-	  CorrectedSim3[mpCurrentKF] = mg2oScw;// 当前帧 对应的 sim3位姿
-	  cv::Mat Twc = mpCurrentKF->GetPoseInverse();//当前帧---> 世界 
+	  mvpCurrentConnectedKFs = mpCurrentKF->GetVectorCovisibleKeyFrames();
+	  mvpCurrentConnectedKFs.push_back(mpCurrentKF);
+          // First save the Sim3 transformation of the current frame mpCurrentKF, fixed
+	  KeyFrameAndPose CorrectedSim3, NonCorrectedSim3;// Get the pose of each key frame after closed-loop g2o optimization, no optimized pose
+	  CorrectedSim3[mpCurrentKF] = mg2oScw;// The sim3 pose corresponding to the current frame
+	  cv::Mat Twc = mpCurrentKF->GetPoseInverse();//current frame ---> world
 
 
 	  {
 	      // Get Map Mutex
 	      unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
 	      
-    // 步骤4.1：通过位姿传播，得到Sim3调整后其它与当前帧相连关键帧的位姿（只是得到，还没有修正）
+    	      // Step 4.1: Through pose propagation, get the pose of other keyframes connected to the current frame after adjustment by Sim3 (just obtained, not yet corrected)
 	      // vector<KeyFrame*>::iterator
-	      //  遍历与当前帧相连的关键帧
+	      //  Iterate over keyframes connected to the current frame
 	      for(auto vit=mvpCurrentConnectedKFs.begin(), vend=mvpCurrentConnectedKFs.end(); vit!=vend; vit++)
 	      {
-		  KeyFrame* pKFi = *vit;//与当前帧相连的关键帧
+		  KeyFrame* pKFi = *vit;//keyframe connected to the current frame
 
-		  cv::Mat Tiw = pKFi->GetPose();// 帧位姿
-                  // currentKF在前面已经添加
+		  cv::Mat Tiw = pKFi->GetPose();// frame pose
+                  // currentKF has been added before
 		  if(pKFi != mpCurrentKF)
 		  {
-		     // 得到当前帧到pKFi帧的相对变换
+		      // Get the relative transformation from the current frame to the pKFi frame
 		      cv::Mat Tic = Tiw*Twc;
 		      cv::Mat Ric = Tic.rowRange(0,3).colRange(0,3);
 		      cv::Mat tic = Tic.rowRange(0,3).col(3);
 		      g2o::Sim3 g2oSic(Converter::toMatrix3d(Ric),Converter::toVector3d(tic),1.0);
-		    // 当前帧的位姿mg2oScw 固定不动，其它的关键帧根据相对关系得到Sim3调整的位姿
-		      g2o::Sim3 g2oCorrectedSiw = g2oSic*mg2oScw;// 
+		      // The pose mg2oScw of the current frame is fixed, and other key frames get the pose adjusted by Sim3 according to the relative relationship
+		      g2o::Sim3 g2oCorrectedSiw = g2oSic*mg2oScw;
 		      //Pose corrected with the Sim3 of the loop closure
-	   // 得到闭环g2o优化后各个关键帧的位姿
+	   	      // Get the pose of each key frame after closed-loop g2o optimization
 		      CorrectedSim3[pKFi]=g2oCorrectedSiw;
 		  }
 
@@ -614,83 +616,82 @@ namespace ORB_SLAM2
 		  cv::Mat tiw = Tiw.rowRange(0,3).col(3);
 		  g2o::Sim3 g2oSiw(Converter::toMatrix3d(Riw),Converter::toVector3d(tiw),1.0);
 		  //Pose without correction
-	   // 当前帧相连关键帧，没有进行闭环g2o优化的位姿
+	   	  // The current frame is connected to keyframes, and there is no pose for closed-loop g2o optimization
 		  NonCorrectedSim3[pKFi]=g2oSiw;
 	      }
-     // 步骤4.2：步骤4.1得到调整相连帧位姿后，修正这些关键帧的MapPoints
+     	      // Step 4.2: After getting the pose of the connected frames adjusted in Step 4.1, correct the MapPoints of these keyframes
 	      // Correct all MapPoints obsrved by current keyframe and neighbors, so that they align with the other side of the loop
-	    // KeyFrameAndPose::iterator
-         // 遍历 每一个相连帧 用优化的位姿 修正帧相关的地图点
+	     // KeyFrameAndPose::iterator
+            // Traverse each connected frame and use the optimized pose to correct frame-related map points
 	    for(auto mit=CorrectedSim3.begin(), mend=CorrectedSim3.end(); mit!=mend; mit++)
 	      {
-		  KeyFrame* pKFi = mit->first;//帧
-		  g2o::Sim3 g2oCorrectedSiw = mit->second;//优化后的位姿  世界到 帧
-		  g2o::Sim3 g2oCorrectedSwi = g2oCorrectedSiw.inverse();//帧 到 世界
+		  KeyFrame* pKFi = mit->first;//frame
+		  g2o::Sim3 g2oCorrectedSiw = mit->second;//optimized pose
+		  g2o::Sim3 g2oCorrectedSwi = g2oCorrectedSiw.inverse();//frame
 
-		  g2o::Sim3 g2oSiw =NonCorrectedSim3[pKFi];//未优化的位姿
+		  g2o::Sim3 g2oSiw =NonCorrectedSim3[pKFi];//unoptimized pose
 		  
-         // 遍历 帧的 每一个地图点
-		  vector<MapPoint*> vpMPsi = pKFi->GetMapPointMatches();//所有的地图点
+        	  //Iterate over each map point of the frame
+		  vector<MapPoint*> vpMPsi = pKFi->GetMapPointMatches();//all map points
 		  for(size_t iMP=0, endMPi = vpMPsi.size(); iMP<endMPi; iMP++)
 		  {
-		      MapPoint* pMPi = vpMPsi[iMP];// 每一个地图点
+		      MapPoint* pMPi = vpMPsi[iMP];// every map point
 		      
 		      if(!pMPi)
 			  continue;
 		      if(pMPi->isBad())
 			  continue;
-		      if(pMPi->mnCorrectedByKF == mpCurrentKF->mnId)// 标记 防止重复修正
+		      if(pMPi->mnCorrectedByKF == mpCurrentKF->mnId)// Prevent duplicate corrections
 			  continue;
 
-		      // Project with non-corrected pose and project back with corrected pose
-	     // 将该未校正的 eigP3Dw 先从 世界坐标系映射 到 未校正的pKFi相机坐标系，然后再反映射到 校正后的世界坐标系下      
+		      // Project with non-corrected pose and project back with corrected pose 
 		      cv::Mat P3Dw = pMPi->GetWorldPos();
 		      Eigen::Matrix<double,3,1> eigP3Dw = Converter::toVector3d(P3Dw);
 		      Eigen::Matrix<double,3,1> eigCorrectedP3Dw = g2oCorrectedSwi.map( g2oSiw.map(eigP3Dw) );
 
-		      cv::Mat cvCorrectedP3Dw = Converter::toCvMat(eigCorrectedP3Dw);//opencv mat格式
-		      pMPi->SetWorldPos(cvCorrectedP3Dw);//更新地图点坐标值
-		      pMPi->mnCorrectedByKF = mpCurrentKF->mnId;// 标记 防止重复修正
-		      pMPi->mnCorrectedReference = pKFi->mnId;//
-		      pMPi->UpdateNormalAndDepth();//更新 地图点 观测 方向等信息
+		      cv::Mat cvCorrectedP3Dw = Converter::toCvMat(eigCorrectedP3Dw);//opencv mat Format
+		      pMPi->SetWorldPos(cvCorrectedP3Dw);//Update map point coordinate values
+		      pMPi->mnCorrectedByKF = mpCurrentKF->mnId;// Prevent duplicate corrections
+		      pMPi->mnCorrectedReference = pKFi->mnId;
+		      pMPi->UpdateNormalAndDepth();//update map point, observation and directions, etc.
 		  }
 
 		  // Update keyframe pose with corrected Sim3. First transform Sim3 to SE3 (scale translation)
-     // 步骤4.3：将Sim3转换为SE3，根据更新的Sim3，更新关键帧的位姿
-		  Eigen::Matrix3d eigR = g2oCorrectedSiw.rotation().toRotationMatrix();//旋转矩阵 转到 旋转向量 roll pitch yaw
+     		  // Step 4.3: Convert Sim3 to SE3, and update the pose of keyframes according to the updated Sim3
+		  Eigen::Matrix3d eigR = g2oCorrectedSiw.rotation().toRotationMatrix();//Rotation Matrix to Rotation Vector 
 		  Eigen::Vector3d eigt = g2oCorrectedSiw.translation();
-		  double s = g2oCorrectedSiw.scale();//相似变换尺度
+		  double s = g2oCorrectedSiw.scale();//Similarity Transformation Scale
 
 		  eigt *=(1./s); //[R t/s;0 1]
 
 		  cv::Mat correctedTiw = Converter::toCvSE3(eigR,eigt);
 
-		  pKFi->SetPose(correctedTiw);//更新关键帧 位姿 
+		  pKFi->SetPose(correctedTiw);//update keyframe and pose 
 
 		  // Make sure connections are updated
-     // 步骤4.4：根据共视关系更新当前帧与其它关键帧之间的连接	  
+     		  // Step 4.4: Update the connection between the current frame and other key frames according to the common view relationship	  
 		  pKFi->UpdateConnections();
 	      }
 	      
- // 步骤5：检查当前帧的地图点MapPoints 与闭环检测时匹配的MapPoints是否存在冲突，对冲突的MapPoints进行替换或填补
+ 	      // Step 5: Check whether there is a conflict between the map points MapPoints of the current frame and the MapPoints matched during loop closure detection, and replace or fill the conflicting MapPoints
 	      // Start Loop Fusion
 	      // Update matched map points and replace if duplicated
-	      // 遍历每一个当前帧在闭环匹配时的地图点
+	      // Traverse the map points of each current frame when the loop is closed
 	      for(size_t i=0; i<mvpCurrentMatchedPoints.size(); i++)
 	      {
 		  if(mvpCurrentMatchedPoints[i])
 		  {
-		      MapPoint* pLoopMP = mvpCurrentMatchedPoints[i];//当前帧 在闭环检测匹配的地图点
-		      MapPoint* pCurMP = mpCurrentKF->GetMapPoint(i);//当前帧之前的地图点
-		  // 如果有重复的MapPoint（当前帧和匹配帧各有一个），则用闭环匹配得到的代替现有的
+		      MapPoint* pLoopMP = mvpCurrentMatchedPoints[i];//Detects matching map points in the current frame in a closed loop
+		      MapPoint* pCurMP = mpCurrentKF->GetMapPoint(i);//map point before the current frame
+		      // If there are duplicate MapPoints (one for the current frame and one for the matching frame), replace the existing one with the one obtained from the closed loop match
 		      if(pCurMP)
 			  pCurMP->Replace(pLoopMP);
-		  // 如果当前帧没有该MapPoint，则直接添加    
+		      // If the current frame does not have the MapPoint, add it directly    
 		      else
 		      {
-			  mpCurrentKF->AddMapPoint(pLoopMP,i);//帧添加 关键点对应的 地图点
-			  pLoopMP->AddObservation(mpCurrentKF,i);// 地图点 添加帧 和 其上对应的 关键点id
-			  pLoopMP->ComputeDistinctiveDescriptors();//更新地图点描述子
+			  mpCurrentKF->AddMapPoint(pLoopMP,i);//The frame is added to the map point corresponding to the keypoint
+			  pLoopMP->AddObservation(mpCurrentKF,i);// Map point, add frame and its corresponding keypoint id
+			  pLoopMP->ComputeDistinctiveDescriptors();//Update map point descriptor
 		      }
 		  }
 	      }
@@ -701,33 +702,33 @@ namespace ORB_SLAM2
 	  // into the current keyframe and neighbors using corrected poses.
 	  // Fuse duplications.
 	  
-// 步骤6：通过将 闭环时相连关键帧的地图点 mvpLoopMapPoints 投影到这些 当前帧相邻关键帧中，进行MapPoints检查与替换	  
+	  // Step 6: Check and replace MapPoints by projecting the map points mvpLoopMapPoints of the connected keyframes when the loop is closed to these adjacent keyframes of the current frame	  
 	  SearchAndFuse(CorrectedSim3);
 
 	  
-// 步骤7：更新当前关键帧之间的共视相连关系，得到因闭环时MapPoints融合而新得到的连接关系
+	  // Step 7: Update the common-view connection relationship between the current keyframes, and obtain the newly obtained connection relationship due to the fusion of MapPoints when the loop is closed
 	  // After the MapPoint fusion, new links in the covisibility graph will appear attaching both sides of the loop
-	  map<KeyFrame*, set<KeyFrame*> > LoopConnections;//新 一级二级相关联关系
+	  map<KeyFrame*, set<KeyFrame*> > LoopConnections;//New first-level, second-level relationship
 	  // vector<KeyFrame*>::iterator
-   // 步骤7.1：遍历当前帧相连关键帧（一级相连）	  
+   	  // Step 7.1: Traverse the current frame connected keyframes (one-level connected)	  
 	  for(auto vit=mvpCurrentConnectedKFs.begin(), vend=mvpCurrentConnectedKFs.end(); vit!=vend; vit++)
 	  {
 	      KeyFrame* pKFi = *vit;
-   // 步骤7.2：得到与当前帧相连关键帧的相连关键帧（二级相连） 之前二级相邻关系      
+   	      // Step 7.2: Obtain the connected key frame (secondary connection) of the keyframe connected to the current frame. The previous second-level adjacent relationship    
 	      vector<KeyFrame*> vpPreviousNeighbors = pKFi->GetVectorCovisibleKeyFrames();
 
 	      // Update connections. Detect new links.
-   // 步骤7.3：更新一级相连关键帧的连接关系	      
+   	      // Step 7.3: Update the connection relationship of the first-level connected keyframes	      
 	      pKFi->UpdateConnections();
-   // 步骤7.4：取出该帧更新后的连接关系	 新二级相邻关系     
+  	      // Step 7.4: Take out the updated connection relationship of the frame, the new second-level adjacent relationship
 	      LoopConnections[pKFi] = pKFi->GetConnectedKeyFrames();
 	      // vector<KeyFrame*>::iterator
-   // 步骤7.5：从新连接关系中 去除闭环之前的二级连接关系，剩下的连接就是由闭环得到的连接关系      
+   	      // Step 7.5: From the new connection relationship, remove the secondary connection relationship before the closed loop, and the remaining connection is the connection relationship obtained by the closed loop     
 	      for(auto vit_prev=vpPreviousNeighbors.begin(), vend_prev=vpPreviousNeighbors.end(); vit_prev!=vend_prev; vit_prev++)
 	      {
-		  LoopConnections[pKFi].erase(*vit_prev);// 新二级相邻关系 中删除旧 二级相连关系
+		  LoopConnections[pKFi].erase(*vit_prev);// Delete the old, second-level connected relationship in the new second-level adjacent relationship
 	      }
-   // 步骤7.6：从连接关系中去除闭环之前的一级连接关系，剩下的连接就是由闭环得到的连接关系
+   	       // Step 7.6: Remove the first-level connection relationship before the closed loop from the connection relationship, and the remaining connection is the connection relationship obtained by the closed loop
 	      // vector<KeyFrame*>::iterator
 	      for(auto vit2=mvpCurrentConnectedKFs.begin(), vend2=mvpCurrentConnectedKFs.end(); vit2!=vend2; vit2++)
 	      {
@@ -736,20 +737,19 @@ namespace ORB_SLAM2
 	  }
 
 	  // Optimize graph
-// 步骤8：进行EssentialGraph优化，LoopConnections是形成闭环后新生成的连接关系，不包括步骤7中当前帧与闭环匹配帧之间的连接关系	  
+	  // Step 8: Perform EssentialGraph optimization, LoopConnections is the newly generated connection relationship after the closed loop is formed, excluding the connection relationship between the current frame and the closed-loop matching frame in Step 7	  
 	  Optimizer::OptimizeEssentialGraph(mpMap, mpMatchedKF, mpCurrentKF, NonCorrectedSim3, CorrectedSim3, LoopConnections, mbFixScale);
 
 	  mpMap->InformNewBigChange();
 
 	  // Add loop edge
-// 步骤9：添加当前帧与闭环匹配帧之间的边（这个连接关系不优化）
-         // 这两句话应该放在OptimizeEssentialGraph之前，因为 OptimizeEssentialGraph 的步骤4.2中有优化，（wubo???）  
+	  // Step 9: Add the edge between the current frame and the closed-loop matching frame (this connection is not optimized) 
 	  mpMatchedKF->AddLoopEdge(mpCurrentKF);
 	  mpCurrentKF->AddLoopEdge(mpMatchedKF);
 
 	  // Launch a new thread to perform Global Bundle Adjustment
-// 步骤10：新建一个线程用于全局BA优化
-       // OptimizeEssentialGraph只是优化了一些主要关键帧的位姿，这里进行全局BA可以全局优化所有位姿和MapPoints  
+	  // Step 10: Create a new thread for global BA optimization
+          // OptimizeEssentialGraph just optimizes the poses of some main keyframes. Performing global BA here can optimize all poses and MapPoints globally.
 	  mbRunningGBA = true;
 	  mbFinishedGBA = false;
 	  mbStopGBA = false;
@@ -761,45 +761,44 @@ namespace ORB_SLAM2
 	  mLastLoopKFid = mpCurrentKF->mnId;   
       }
 
-/**
- * @brief  通过将闭环时相连关键帧上所有的MapPoints投影到这些 关键帧 中，进行MapPoints检查与替换   
- * @param CorrectedPosesMap  闭环相邻帧 及其 对应的 sim3位姿
- */      
+      /**
+	* @brief  Check and replace MapPoints by projecting all MapPoints on keyframes connected to loop closure into these keyframes   
+	* @param CorrectedPosesMap  Closed-loop adjacent frames and their corresponding sim3 poses
+	*/      
       void LoopClosing::SearchAndFuse(const KeyFrameAndPose &CorrectedPosesMap)
       {
 	  ORBmatcher matcher(0.8);
-// 遍历每一个 帧sim3位姿
+	  // Traverse each frame sim3 pose
 	  for(KeyFrameAndPose::const_iterator mit=CorrectedPosesMap.begin(), mend=CorrectedPosesMap.end(); mit!=mend;mit++)
 	  {
 	    
-	      KeyFrame* pKF = mit->first;//每一个相邻帧
-	      g2o::Sim3 g2oScw = mit->second;//位姿
-	      cv::Mat cvScw = Converter::toCvMat(g2oScw);//opencv格式
-              // mvpLoopMapPoints 为闭环时 相邻关键帧上的 多有地图点
+	      KeyFrame* pKF = mit->first;//every adjacent frame
+	      g2o::Sim3 g2oScw = mit->second;//pose
+	      cv::Mat cvScw = Converter::toCvMat(g2oScw);//opencv format
+              // When mvpLoopMapPoints is closed loop, there are many map points on adjacent keyframes
 	      vector<MapPoint*> vpReplacePoints(mvpLoopMapPoints.size(),static_cast<MapPoint*>(NULL));
 	      
-	  // 将闭环相连帧的MapPoints坐标变换到pKF帧坐标系，然后投影，检查冲突并融    
+	      // Transform the MapPoints coordinates of the closed-loop connected frames to the pKF frame coordinate system, then project, check for conflicts and merge  
 	      matcher.Fuse(pKF,cvScw,mvpLoopMapPoints,4,vpReplacePoints);
-	      //对 相邻帧 匹配的地图点 融合更新  vpReplacePoints 是地图点的融合 
-
+	      //For adjacent frames, matching map points, fusion update vpReplacePoints is the fusion of map points 
 	      // Get Map Mutex
 	      unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
 	      const int nLP = mvpLoopMapPoints.size();
 	      for(int i=0; i<nLP;i++)
 	      {
-		  MapPoint* pRep = vpReplacePoints[i];//地图点被关键帧上的点代替的点  关键帧上的点
+		  MapPoint* pRep = vpReplacePoints[i];//The map point is replaced by the point on the keyframe, the point on the keyframe
 		  if(pRep)
 		  {
-		      pRep->Replace(mvpLoopMapPoints[i]);// 用mvpLoopMapPoints替换掉之前的 再替换回来？？
+		      pRep->Replace(mvpLoopMapPoints[i]);// Replace the previous ones with mvpLoopMapPoints
 		  }
 	      }
 	  }
       }
 
- /**
- * @brief    请求闭环检测线程重启
- * @param nLoopKF 闭环当前帧 id
- */          
+      /**
+	* @brief    Request closed loop detection thread restart
+	* @param nLoopKF closed loop current frame id
+	*/          
       void LoopClosing::RunGlobalBundleAdjustment(unsigned long nLoopKF)
       {
 	  cout << "Starting Global Bundle Adjustment" << endl;
@@ -811,7 +810,6 @@ namespace ORB_SLAM2
 	  // Local Mapping was active during BA, that means that there might be new keyframes
 	  // not included in the Global BA and they are not consistent with the updated map.
 	  // We need to propagate the correction through the spanning tree
-	  // 更新地图点 和 关键帧
 	  {
 	      unique_lock<mutex> lock(mMutexGBA);
 	      if(idx!=mnFullBAIdx)
@@ -819,9 +817,9 @@ namespace ORB_SLAM2
 
 	      if(!mbStopGBA)
 	      {
-		  cout << "全局优化完成 Global Bundle Adjustment finished" << endl;
-		  cout << "更新地图 Updating map ..." << endl;
-		  mpLocalMapper->RequestStop();// 停止建图
+		  cout << "Global Bundle Adjustment finished" << endl;
+		  cout << "Updating map ..." << endl;
+		  mpLocalMapper->RequestStop();// stop mapping
 		  // Wait until Local Mapping has effectively stopped
 		  while(!mpLocalMapper->isStopped() && !mpLocalMapper->isFinished())
 		  {
@@ -832,23 +830,23 @@ namespace ORB_SLAM2
 		  unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
 		  
                
-// 步骤1：更新关键帧  地图中所有的关键帧
+		  // Step 1: Update keyframes, all keyframes in the map
 		  // Correct keyframes starting at map first keyframe
 		  list<KeyFrame*> lpKFtoCheck(mpMap->mvpKeyFrameOrigins.begin(),mpMap->mvpKeyFrameOrigins.end());
 		  while(!lpKFtoCheck.empty())
 		  {
-		      KeyFrame* pKF = lpKFtoCheck.front();// 地图中的 关键帧
-		      const set<KeyFrame*> sChilds = pKF->GetChilds();// 孩子 帧
+		      KeyFrame* pKF = lpKFtoCheck.front();// Keyframes in the map
+		      const set<KeyFrame*> sChilds = pKF->GetChilds();// kids frame
 		      cv::Mat Twc = pKF->GetPoseInverse();
-		      // 遍历每一个孩子帧
+		      // iterate over each child frame
 		      for(set<KeyFrame*>::const_iterator sit=sChilds.begin();sit!=sChilds.end();sit++)
 		      {
-			  KeyFrame* pChild = *sit;// 每一个孩子帧
-			  if(pChild->mnBAGlobalForKF != nLoopKF)//跳过 闭环发生事时的当前帧 避免重复
+			  KeyFrame* pChild = *sit;// every child frame
+			  if(pChild->mnBAGlobalForKF != nLoopKF)//skip, the current frame when the closed loop happens, avoid repetition
 			  {
-			      cv::Mat Tchildc = pChild->GetPose()*Twc;// 父亲帧到孩子帧
+			      cv::Mat Tchildc = pChild->GetPose()*Twc;// father frame to child frame
 			      pChild->mTcwGBA = Tchildc*pKF->mTcwGBA;//*Tcorc*pKF->mTcwGBA;
-			      pChild->mnBAGlobalForKF = nLoopKF;// 标记
+			      pChild->mnBAGlobalForKF = nLoopKF;// mark
 
 			  }
 			  lpKFtoCheck.push_back(pChild);
@@ -859,7 +857,7 @@ namespace ORB_SLAM2
 		      lpKFtoCheck.pop_front();
 		  }
 		  
-// 步骤2：更新 地图点 
+		  // Step 2: Update the map point
 		  // Correct MapPoints
 		  const vector<MapPoint*> vpMPs = mpMap->GetAllMapPoints();
 
@@ -870,7 +868,7 @@ namespace ORB_SLAM2
 		      if(pMP->isBad())
 			  continue;
 
-		      if(pMP->mnBAGlobalForKF == nLoopKF)//  关键帧优化过 更新地图点
+		      if(pMP->mnBAGlobalForKF == nLoopKF)//  Keyframes have been optimized, and map points have been updated
 		      {
 			  // If optimized by Global BA, just update
 			  pMP->SetWorldPos(pMP->mPosGBA);
@@ -878,7 +876,7 @@ namespace ORB_SLAM2
 		      else
 		      {
 			  // Update according to the correction of its reference keyframe
-			  KeyFrame* pRefKF = pMP->GetReferenceKeyFrame();//地图点参考帧
+			  KeyFrame* pRefKF = pMP->GetReferenceKeyFrame();//Map point reference frame
 
 			  if(pRefKF->mnBAGlobalForKF != nLoopKF)
 			      continue;
@@ -893,7 +891,7 @@ namespace ORB_SLAM2
 			  cv::Mat Rwc = Twc.rowRange(0,3).colRange(0,3);
 			  cv::Mat twc = Twc.rowRange(0,3).col(3);
 
-			  pMP->SetWorldPos(Rwc*Xc+twc);// 参考帧 地图点
+			  pMP->SetWorldPos(Rwc*Xc+twc);// reference frame
 		      }
 		  }            
 
@@ -911,10 +909,10 @@ namespace ORB_SLAM2
 
      
       
-/**
- * @brief    请求闭环检测线程重启
- * @param 无
- */  
+	/**
+	 * @brief    Request closed loop detection thread restart
+	 * @param    None
+	 */  
       void LoopClosing::RequestReset()
       {
 	  {
