@@ -825,13 +825,13 @@ namespace ORB_SLAM2
 			      vKeysCell,minThFAST,true);// Extract by small threshold
 		      }
              	       // [6] Calculate the position of the actual feature point
-		      if(!vKeysCell.empty())// 提取到角点了
+		      if(!vKeysCell.empty())// Extracted to the corner
 		      {//vector<cv::KeyPoint>::iterator
 			  for( auto vit=vKeysCell.begin(); vit!=vKeysCell.end();vit++)
 			  {
-			      (*vit).pt.x += j*wCell;// 小格子内的点坐标  变换到 整幅图像上 的 坐标 
+			      (*vit).pt.x += j*wCell;// Point coordinates in the small grid, transformed to coordinates on the entire image
 			      (*vit).pt.y += i*hCell;
-			      vToDistributeKeys.push_back(*vit);// 一幅图像 所有小格子内提取到的 特征点
+			      vToDistributeKeys.push_back(*vit);// An image, the feature points extracted in all small grids
 			  }
 		      }
 
@@ -840,24 +840,24 @@ namespace ORB_SLAM2
 
 	      vector<KeyPoint> & keypoints = allKeypoints[level];
 	      keypoints.reserve(nfeatures);
-     //【7】 将特征点进行  八叉树划分   层级 图像范围  层级特征点个数  层级
+     	      //[7] The feature points are divided into octrees, the range of the hierarchical image, and the number of hierarchical feature points.
 	      keypoints = DistributeOctTree(vToDistributeKeys, minBorderX, maxBorderX,
 					    minBorderY, maxBorderY,mnFeaturesPerLevel[level], level);
 
 	      const int scaledPatchSize = PATCH_SIZE*mvScaleFactor[level];
 
 	      // Add border to coordinates and scale information
-      // 【8】换算特征点真实位置（添加边界值），添加特征点的尺度信息      
+      	      // [8] Convert the real position of the feature point (add the boundary value), and add the scale information of the feature point    
 	      const int nkps = keypoints.size();
 	      for(int i=0; i<nkps ; i++)
 	      {
-		  keypoints[i].pt.x += minBorderX;// 加上 层级图像起始 检测 像素
+		  keypoints[i].pt.x += minBorderX;// Plus level image start detection pixel
 		  keypoints[i].pt.y += minBorderY;
 		  keypoints[i].octave = level;
 		  keypoints[i].size = scaledPatchSize;
 	      }
 	  }
-     // 【9】计算特征点的方向
+     	  // [9] Calculate the direction of feature points
 	  for (int level = 0; level < nlevels; ++level)
 	      computeOrientation(mvImagePyramid[level], allKeypoints[level], umax);
       }
@@ -1114,28 +1114,28 @@ namespace ORB_SLAM2
 	  }
       }
 
-      // 计算图像金字塔
+      // Calculate Image Pyramid
       void ORBextractor::ComputePyramid(cv::Mat image)
       {
-	  for (int level = 0; level < nlevels; ++level)// 总金字塔层数为 nlevels  产生每一层级的图像
+	  for (int level = 0; level < nlevels; ++level)// The total number of pyramid levels is nlevels, generating images for each level
 	  {
-	      float scale = mvInvScaleFactor[level];// 初始化是产生 每一层级的 尺度因子 倒数  1/sc   是乘以 原图像尺寸的 
+	      float scale = mvInvScaleFactor[level];// Initialization is to generate the reciprocal scale factor of each level 1/sc is multiplied by the original image size 
 	      Size sz(cvRound((float)image.cols*scale), cvRound((float)image.rows*scale));
-	      // 层级 图像尺寸 在原图像尺寸上乘以  尺度因子 倒数  1/sc
-	      // 加上边框的尺寸
+	      // The level image size is the original image size, multiplied by the reciprocal scale factor 1/sc
+	      // add border size
 	      Size wholeSize(sz.width + EDGE_THRESHOLD*2, sz.height + EDGE_THRESHOLD*2);
 	      Mat temp(wholeSize, image.type()), masktemp;
-	      // 初始化大小
+	      // Initialize size
 	      mvImagePyramid[level] = temp(Rect(EDGE_THRESHOLD, EDGE_THRESHOLD, sz.width, sz.height));
 
 	      // Compute the resized image
-	     // 主要就是根据尺度因子对图像进行缩放处理
+	      // The main thing is to scale the image according to the scale factor
 	      if( level != 0 )
 	      {
 		  resize(mvImagePyramid[level-1], mvImagePyramid[level], sz, 0, 0, INTER_LINEAR);
-		  // 加上边框
+		  // add border
 		  copyMakeBorder(mvImagePyramid[level], temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
-				BORDER_REFLECT_101+BORDER_ISOLATED);  // 反射填充       
+				BORDER_REFLECT_101+BORDER_ISOLATED);  // reflection fill       
 	      }
 	      else
 	      {
