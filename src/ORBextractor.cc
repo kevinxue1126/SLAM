@@ -1,36 +1,35 @@
-
 /**
 * Software License Agreement (BSD License)
 *
-*作者对opencv中的orb源码进行了修改，将特征进行均匀化
+* The author modified the orb source code in opencv to homogenize the features
 * 
-* 特征提取也就是对图像进行一定的操作，也就是对像素点进行一些操作，
-* 跟相邻的一些像素点进行比较，通过一些模板进行滤波卷积等操作，再通过阈值进行一些控制，
-* 找到了可以代表该图像的某些位置，这也就是特征提取。
-* 
-* 
-*  1.构造金字塔，在每层金字塔上采用Fast算法提取特征点，采用Harris角点响应函数，
-*      按角点响应值排序，选取前N个特征点。
-
-    2. oFast:计算每个特征点的主方向，灰度质心法，计算特征点半径为r的圆形邻域范围内的灰度质心位置。
-    从中心位置到质心位置的向量，定义为该特 征点的主方向。
+* Feature extraction is to perform certain operations on the image, that is to perform some operations on the pixels, 
+* compare them with some adjacent pixels, perform filtering and convolution operations through some templates, 
+* and then perform some control through thresholds. Represent some position of the image, which is also called feature extraction.
 * 
 * 
-每一帧图像共提取1000个特征点，分布在金字塔8层中，层间尺度比例1.2，
-按照等比数列求出各层 提取的关键点数
-计算下来金字塔0层大约有217个特征点，7层大约有50个特征点。
-
-* 提取特征点使用FAST，但是ORB中的FAST加入了旋转信息，也就是去计算特征点的角度，
-同时加入了尺度信息，也就是计算在多层金字塔中去提取。
-
-描述子使用的是BRIEF，通过二进制BRIEF描述子之间的汉明距离来考察两个特征点之间的相似度。
+*  1. Construct a pyramid, use the Fast algorithm to extract feature points on each layer of the pyramid, 
+*	use the Harris corner response function, sort by the response value of the corner points, and select the top N feature points.
+*  
+*
+*  2. oFast: Calculate the main direction of each feature point, the gray centroid method, calculate the gray centroid position within the circular neighborhood of the feature point radius r.
+*     The vector from the center position to the centroid position is defined as the main direction of the feature point.
 * 
-最后为了提取出的特征点在图像中分布比较均匀（实际情况中，特征点通常分布得比较集中，
-这样不利于进行匹配，也不利于精确地求解相机间的位姿从而得到精确的VO轨迹），
-使用了八叉树（其实是平面上的四叉树）的数据结构来存储提取出的特征点
-
-
-
+* 
+* A total of 1000 feature points are extracted from each frame of image, which are distributed in the 8 layers of the pyramid, 
+* and the scale ratio between layers is 1.2. The number of key points extracted for each layer is calculated according to the proportional sequence, 
+* and there are about 217 feature points in the 0 layer of the pyramid. There are about 50 feature points in 7 layers.
+*
+*
+* FAST is used to extract feature points, but FAST in ORB adds rotation information, that is to calculate the angle of feature points, 
+* and adds scale information, that is, the calculation is extracted in a multi-layer pyramid.
+* 
+* The descriptor uses Brief, and the similarity between two feature points is examined by the Hamming distance between the binary Brief descriptors.
+* 
+* Finally, the extracted feature points are distributed evenly in the image (in practice, the feature points are usually distributed more concentratedly, 
+* which is not conducive to matching, and it is not conducive to accurately solving the pose between cameras to obtain an accurate VO trajectory) , 
+* which uses an octree (actually a quadtree on a plane) data structure to store the extracted feature points
+* 
 */
 
 
