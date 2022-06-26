@@ -792,7 +792,7 @@ namespace ORB_SLAM2
 	  * @brief Using the fundamental matrix F12, a 2d-2d matching point pair is generated between the two keyframes and the map points where the feature points of the two frames are not matched 
 	  * Each feature point of key frame 1 and the feature point of key frame 2 belong to the same node of the dictionary (including many similar words)
 	  * The feature points under the node are matched with descriptors, and the closest matching distance is selected under the condition that the epipolar geometric constraints are met
-	  * 最After matching points, direction difference consistency constraints, detection and removal of some mismatches
+	  * After matching points, direction difference consistency constraints, detection and removal of some mismatches
 	  * @param pKF1          keyframe 1
 	  * @param pKF2          keyframe 2
 	  * @param F12           fundamental matrix F    p2 transpose × F  × p1 = 0
@@ -1167,45 +1167,42 @@ namespace ORB_SLAM2
 	int ORBmatcher::Fuse(KeyFrame *pKF, cv::Mat Scw, const vector<MapPoint *> &vpPoints, float th, vector<MapPoint *> &vpReplacePoint)
 	{
 	    // Get Calibration Parameters for later projection
-	    // 相机内参数
+	    // In-camera parameters
 	    const float &fx = pKF->fx;
 	    const float &fy = pKF->fy;
 	    const float &cx = pKF->cx;
 	    const float &cy = pKF->cy;
 
 	    // Decompose Scw
-	    // 相似变换Sim3 转换到 欧式变换SE3
+	    // Similarity transformation Sim3 converted to Euclidean transformation SE3
 	    cv::Mat sRcw = Scw.rowRange(0,3).colRange(0,3);
-	    const float scw = sqrt(sRcw.row(0).dot(sRcw.row(0)));//相似变换里的 旋转矩阵的 相似尺度因子
-	    cv::Mat Rcw = sRcw/scw;// 欧式变换 里 的旋转矩阵
-	    cv::Mat tcw = Scw.rowRange(0,3).col(3)/scw;// 欧式变换 里 的 平移向量
-	    cv::Mat Ow = -Rcw.t()*tcw;//相机中心在 世界坐标系下的 坐标
+	    const float scw = sqrt(sRcw.row(0).dot(sRcw.row(0)));//Similarity scale factor for rotation matrices in similarity transformations
+	    cv::Mat Rcw = sRcw/scw;// Rotation matrix in Euclidean transformation
+	    cv::Mat tcw = Scw.rowRange(0,3).col(3)/scw;// translation vector in euclidean transformation
+	    cv::Mat Ow = -Rcw.t()*tcw;//The coordinates of the camera center in the world coordinate system
 
 	    // Set of MapPoints already found in the KeyFrame
-	    // 关键帧已有的 匹配地图点
 	    const set<MapPoint*> spAlreadyFound = pKF->GetMapPoints();
-	    int nFused=0;// 融合计数
-	    const int nPoints = vpPoints.size();// 需要融合的 地图点 数量
+	    int nFused=0;// fusion count
+	    const int nPoints = vpPoints.size();// The number of map points to be fused
 
-	    // For each candidate MapPoint project and match
-// 步骤1： 遍历所有需要融合的 地图点 MapPoints   
+	    // step 1: For each candidate MapPoint project and match  
 	    for(int iMP=0; iMP<nPoints; iMP++)
 	    {
-		MapPoint* pMP = vpPoints[iMP];// 需要融合的 地图点 
-//步骤2： 跳过不好的地图点
-		if(!pMP)// 不存在
+		MapPoint* pMP = vpPoints[iMP];// Map points that need to be merged
+		//Step 2: Skip Bad Map Points
+		if(!pMP)// does not exist
 		    continue;
 		// Discard Bad MapPoints and already found
-		// 地图点 是坏点  地图点 被 关键帧观测到 已经匹配好了 不用 融合
 		if(pMP->isBad() || spAlreadyFound.count(pMP))
 		    continue; 
-//步骤3： 地图点 投影到 关键帧 像素平面上 不在平面内的 不考虑
+		//Step 3: Project the map point to the keyframe pixel plane. Those not in the plane are not considered
 		// Get 3D Coords.
-		cv::Mat p3Dw = pMP->GetWorldPos();// 地图点世界坐标系坐标
+		cv::Mat p3Dw = pMP->GetWorldPos();// map point world coordinate system coordinates
 		// Transform into Camera Coords.
-		cv::Mat p3Dc = Rcw*p3Dw+tcw;// 地图点在 帧坐标系 下的 坐标
+		cv::Mat p3Dc = Rcw*p3Dw+tcw;// The coordinates of the map point in the frame coordinate system
 		// Depth must be positive
-		if(p3Dc.at<float>(2)<0.0f)// 地图点在相机前方 深度不能为负值
+		if(p3Dc.at<float>(2)<0.0f)
 		    continue;
 		// Project into Image 投影到像素平面
 		const float invz = 1.0/p3Dc.at<float>(2);
