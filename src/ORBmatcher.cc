@@ -1,23 +1,22 @@
 /**
 * This file is part of ORB-SLAM2.
-* ORB_ 匹配点
-* * 该类负责
-* 1特征点与特征点之间，
-* 2地图点与特征点之间通过投影关系
-* 3词袋模型 DBow2进行匹配
-* 4Sim3位姿匹配。
+* ORB_ match point
+* The class is responsible for
+* 1 Between feature points and feature points,
+* 2 Projection relationship between map points and feature points
+* 3 bag of words model DBow2 for matching
+* 4 Sim3 pose matching.
 * 
-* 用来辅助完成单目初始化，三角化恢复新的地图点，tracking，relocalization以及loop closing，
-* 因此比较重要。
+* It is used to assist in the completion of monocular initialization, triangulation to restore new map points, tracking, 
+* relocalization and loop closing, so it is more important.
 * 
-* 各类之间的匹配   局部匹配  全局匹配等 
-
-何时用投影匹配，何时用DBow2进行匹配？
-在Relocalization和LoopClosing中进行匹配的是在很多帧关键帧集合中匹配，
-属于Place Recognition，因此需要用DBow，
-
-而 投影匹配 适用于两帧之间，
-或者投影范围内（局部地图，前一个关键帧对应地图点）的MapPoints与当前帧之间。
+* 
+* match between classes,local match, global match etc.
+*
+* The matching in Relocalization and LoopClosing is matching in a set of key frames of many frames, 
+* which belongs to Place Recognition, so DBow is required, and projection matching is applicable between two frames, 
+* or within the projection range (local map, the previous key frame corresponds to map points) between the MapPoints and the current frame.
+* 
 */
 
 #include "ORBmatcher.h"
@@ -35,65 +34,65 @@ using namespace std;
 
 namespace ORB_SLAM2
 {
-	// 阈值等参数
-	const int ORBmatcher::TH_HIGH = 100;// 相似变换 描述子匹配 阈值
-	const int ORBmatcher::TH_LOW = 50;   // 欧式变换 描述子匹配 阈值    
-	const int ORBmatcher::HISTO_LENGTH = 30;// 匹配点对 观察方向差 的 直方图 格子数量
+	// Threshold and other parameters
+	const int ORBmatcher::TH_HIGH = 100;      // Similarity Transformation, Descriptor Matching Threshold
+	const int ORBmatcher::TH_LOW = 50;        // Euclidean Transform, Descriptor Matching Threshold    
+	const int ORBmatcher::HISTO_LENGTH = 30;  // Matching point pairs, the number of histogram grids of the observation direction difference
 
 	ORBmatcher::ORBmatcher(float nnratio, bool checkOri): mfNNratio(nnratio), mbCheckOrientation(checkOri)
 	{
 	}
 
-  // 当前帧 和 局部地图 之间的匹配
-  // 最好的匹配 和 次好的 匹配在 同一金字塔层级  并且 最短的距离不小于次短距离的 80% 不被选为匹配点
-  /**
-  * @brief 通过投影，对Local MapPoint进行跟踪
-  *
-  * 将Local MapPoint投影到当前帧中, 由此增加当前帧的MapPoints \n
-  * 在SearchLocalPoints()中已经将Local MapPoints重投影（isInFrustum()）到当前帧 \n
-  * 并标记了这些点是否在当前帧的视野中，即 mbTrackInView \n
-  * 对这些MapPoints，在其投影点附近根据描述子距离选取匹配，
-  * 以及最终的方向投票机制进行剔除
-  * @param  F           当前帧
-  * @param  vpMapPoints Local MapPoints 局部地图点  和当前帧有关连的帧对应的 地图点集合
-  * @param  th          阈值
-  * @return                成功匹配的数量
-  * @see SearchLocalPoints() isInFrustum()
-  */
+  
+	  /**
+	  * @brief Track Local MapPoint through projection
+	  *
+	  * Project the Local MapPoint into the current frame, thereby increasing the MapPoints of the current frame \n
+	  * Local MapPoints have been reprojected (isInFrustum()) to the current frame in SearchLocalPoints() \n
+	  * and marked whether the points are in the current frame's field of view, i.e. mbTrackInView \n
+	  * For these MapPoints, matches are selected according to the descriptor distance near their projection points, 
+	  * and the final direction voting mechanism is eliminated.
+	  * 
+	  * @param  F           current frame
+	  * @param  vpMapPoints Local MapPoints The set of map points corresponding to the frame associated with the local map point and the current frame
+	  * @param  th          threshold
+	  * @return             Number of successful matches
+	  * @see SearchLocalPoints() isInFrustum()
+	  */
 	int ORBmatcher::SearchByProjection(Frame &F, const vector<MapPoint*> &vpMapPoints, const float th)
 	{
 	    int nmatches=0;
 
 	    const bool bFactor = th != 1.0;
 
-	    for(size_t iMP=0; iMP<vpMapPoints.size(); iMP++)//局部地图点
+	    for(size_t iMP=0; iMP<vpMapPoints.size(); iMP++)//local map point
 	    {
-		MapPoint* pMP = vpMapPoints[iMP];//局部地图点
-	  // 步骤1 ： 判断该点是否要投影  
-		if(!pMP->mbTrackInView)//不在视野内
+		MapPoint* pMP = vpMapPoints[iMP];//local map point
+	  	// Step 1: Determine whether the point is to be projected
+		if(!pMP->mbTrackInView)//out of sight
 		    continue;
 
 		if(pMP->isBad())
 		    continue;
-	// 步骤2 ： 通过距离预测的金字塔层数，该层数相对于当前的帧
+		// Step 2: Pyramid level predicted by distance, the level is relative to the current frame
 		const int &nPredictedLevel = pMP->mnTrackScaleLevel;
 
 		// The size of the window will depend on the viewing direction
-	// 步骤3 ： 搜索窗口的大小取决于视角, 若当前视角和平均视角夹角接近0度时, r取一个较小的值
+		// Step 3: The size of the search window depends on the viewing angle. If the angle between the current viewing angle and the average viewing angle is close to 0 degrees, r takes a smaller value
 		float r = RadiusByViewingCos(pMP->mTrackViewCos);
-	      // 如果需要进行更粗糙的搜索，则增大范围
+	      	// Increase the range if a coarser search is required
 		if(bFactor)
 		    r *= th;
 		
-	      // 在当前帧中获取候选匹配点
-	// 步骤4： 通过投影点(投影到当前帧,见isInFrustum())以及搜索窗口和预测的尺度进行搜索, 找出附近的兴趣点
+	        // Get candidate matching points in the current frame
+		// Step 4: Search by projected points (projected to the current frame, see isInFrustum()) and search window and predicted scale to find nearby interest points
 		const vector<size_t> vIndices =
 			F.GetFeaturesInArea(pMP->mTrackProjX,pMP->mTrackProjY,r*F.mvScaleFactors[nPredictedLevel],nPredictedLevel-1,nPredictedLevel);
 
 		if(vIndices.empty())
 		    continue;
 
-		const cv::Mat MPdescriptor = pMP->GetDescriptor();// 局部地图点的描述子
+		const cv::Mat MPdescriptor = pMP->GetDescriptor();// Descriptors for local map points
 
 		int bestDist=256;
 		int bestLevel= -1;
@@ -101,42 +100,42 @@ namespace ORB_SLAM2
 		int bestLevel2 = -1;
 		int bestIdx =-1 ;
 
-	// 步骤5： 地图点描述子 和 当前帧候选 关键点描述子 匹配
+		// Step 5: Map point descriptor and current frame candidate, key point descriptor matching
 		// Get best and second matches with near keypoints
 		// vector<size_t>::const_iterator vit
-		for(auto  vit=vIndices.begin(), vend=vIndices.end(); vit!=vend; vit++)// 每一个候选匹配点
+		for(auto  vit=vIndices.begin(), vend=vIndices.end(); vit!=vend; vit++)// each candidate matching point
 		{
-		    const size_t idx = *vit;// 每一个候选匹配点
+		    const size_t idx = *vit;// each candidate matching point
 
-	  // 步骤6：  当前帧关键点已经有对应的地图点 或者 地图点计算出来的匹配点 y偏移 比当前的 立体匹配点 误差过大 跳过   
-		    // 如果当前帧Frame中的该兴趣点 已经有对应的MapPoint了,则退出该次循环
+	  	    // Step 6: The key point of the current frame, there is already a corresponding map point or a matching point y calculated from the map point, the offset is larger than the current stereo matching point, and the error is too large to skip.
+		    //If the interest point in the current frame already has a corresponding MapPoint, exit the loop
 		    if(F.mvpMapPoints[idx])
-			if(F.mvpMapPoints[idx]->Observations() > 0)// 已经找到过观测帧 就跳过
+			if(F.mvpMapPoints[idx]->Observations() > 0)//Skip if observation frame is already found
 			    continue;
-		  // 跟踪到的 匹配点坐标 与实际立体匹配的 误差过大 跳过
+		    // The error between the tracked matching point coordinates and the actual stereo matching is too large, skipping
 		    if(F.mvuRight[idx]>0)// 双目 / 深度相机
 		    {
 			const float er = fabs(pMP->mTrackProjXR  -  F.mvuRight[idx]);//
-			if(er > r*F.mvScaleFactors[nPredictedLevel])// 跟踪到的 匹配点坐标 与实际立体匹配的 误差过大
+			if(er > r*F.mvScaleFactors[nPredictedLevel])// The error between the tracked matching point coordinates and the actual stereo matching is too large
 			    continue;
 		    }
 
-		    const cv::Mat &d = F.mDescriptors.row(idx);// 每一个候选匹配点 的描述子
+		    const cv::Mat &d = F.mDescriptors.row(idx);// Descriptor for each candidate matching point
 
-		    const int dist = DescriptorDistance(MPdescriptor,d);// 局部地图点 与 当前帧地图点 之间的 描述子距离
-	  // 步骤7：根据描述子距离 寻找 距离最小和次小的特征点
+		    const int dist = DescriptorDistance(MPdescriptor,d);// Descriptor distance between the local map point and the current frame map point
+	  	    // Step 7: According to the descriptor distance, find the feature points with the smallest and second smallest distances
 		    if(dist<bestDist)
 		    {
-			bestDist2=bestDist;// 次近的距离
-			bestDist=dist;// 最近的距离
+			bestDist2=bestDist;// next closest distance
+			bestDist=dist;// the closest distance
 			bestLevel2 = bestLevel;
-			bestLevel = F.mvKeysUn[idx].octave;// 对应关键点的金字塔层级
+			bestLevel = F.mvKeysUn[idx].octave;// Pyramid level corresponding to keypoints
 			bestIdx=idx;
 		    }
 		    else if(dist<bestDist2)
 		    {
 			bestLevel2 = F.mvKeysUn[idx].octave;
-			bestDist2=dist;// 次近的距离
+			bestDist2=dist;// next closest distance
 		    }
 		}
 
@@ -144,9 +143,9 @@ namespace ORB_SLAM2
 		if(bestDist<=TH_HIGH)
 		{
 		    if(bestLevel == bestLevel2 && bestDist > mfNNratio*bestDist2)
-			continue;// 最好的匹配 和 次好的 匹配在 同一金字塔层级  并且 最短的距离不小于次短距离的 80%
+			continue;// 最The best match and the second best match are at the same pyramid level and the shortest distance is not less than 80% of the second shortest distance
 			
-	// 步骤7：为Frame中的兴趣点增加对应的MapPoint
+		    // Step 7: Add the corresponding MapPoint to the interest point in the Frame
 		    F.mvpMapPoints[bestIdx]=pMP;// 
 		    nmatches++;
 		}
@@ -164,25 +163,25 @@ namespace ORB_SLAM2
 		return 4.0;
 	}
 
-  /**
-  * @brief  检查 给出在匹配点对 是否在 极线范围内
-  * @Param kp1   帧1上的关键点kp1
-  * @Param  kp2  帧2 pKF2   上的关键点kp2
-  * @Param F12   帧1到帧2的基本矩阵F12    p2转置 * F * p1 = 0 
-  * @Param pKF2  帧2 pKF2        
-  * @return kp2 距离 kp1 在帧2图像上极线 的距离在合理范围内 足够小 认为有可能匹配
-  */
+	  /**
+	  * @brief  Checks if the pair of points given at the match is within the epipolar range
+	  * @Param  kp1   keypoint kp1 on frame 1
+	  * @Param  kp2   keypoint kp2 on frame 2 pKF2
+	  * @Param  F12   fundamental matrix F12 of frame 1 to frame 2, p2 transpose * F * p1 = 0
+	  * @Param  pKF2  frame 2 pKF2   
+	  * @return kp2   The distance from kp1 to the epipolar line on the frame 2 image is small enough within a reasonable range, and it is considered that it is possible to match
+	  */
 	bool ORBmatcher::CheckDistEpipolarLine(const cv::KeyPoint &kp1,const cv::KeyPoint &kp2,const cv::Mat &F12,const KeyFrame* pKF2)
 	{
-	    // Epipolar line in second image  l = kp1(齐次表示)转置F12 = [a b c]
-	  // 求出关键点kp1在 关键帧图像pKF2上对应的极线
+	    // Epipolar line in second image  l = kp1(Homogeneous representation) transpose F12 = [a b c]
+	    // Find the epipolar line corresponding to the key point kp1 on the key frame image pKF2
 	    const float a = kp1.pt.x * F12.at<float>(0,0) + kp1.pt.y * F12.at<float>(1,0) + F12.at<float>(2,0);
 	    const float b = kp1.pt.x * F12.at<float>(0,1) + kp1.pt.y * F12.at<float>(1,1) + F12.at<float>(2,1);
 	    const float c = kp1.pt.x * F12.at<float>(0,2)  + kp1.pt.y * F12.at<float>(1,2) + F12.at<float>(2,2);
 	  
-	    // 计算kp2特征点到 极线 的距离：
-	    // 极线l：ax + by + c = 0
-	    // (u,v)到l的距离为：d = |au+bv+c| / sqrt(a^2+b^2) 
+	    // Calculate the distance from the kp2 feature point to the epipolar line:
+	    // Polar line l：ax + by + c = 0
+	    // The distance from (u,v) to l is：d = |au+bv+c| / sqrt(a^2+b^2) 
 	    // d^2 = |au+bv+c|^2/(a^2+b^2)
 	    const float num = a*kp2.pt.x + b*kp2.pt.y + c;
 	    const float den = a*a + b*b;
@@ -190,93 +189,86 @@ namespace ORB_SLAM2
 		return false;
 	    const float dsqr = num*num/den;
 
-	    return dsqr < 3.84 * pKF2->mvLevelSigma2[kp2.octave];// 距离在合理范围内   3.84卡方约束
+	    return dsqr < 3.84 * pKF2->mvLevelSigma2[kp2.octave];// Distance is within reason 3.84 chi-square constraint
 	}
 
-  // 当前帧 和 参考关键帧 中的地图点  进行特征匹配  匹配到已有地图点
-  //  关键帧和 当前帧 均用 字典单词线性表示
-  // 对应单词的 描述子 肯定比较相近 取对应单词的描述子进行匹配可以加速匹配
-  // 当前帧每个关键点的描述子 和 参考关键帧每个地图点的描述子匹配 
-  // 保留距离最近的匹配地图点 且最短距离和 次短距离相差不大 （ mfNNratio）
-  // 如果需要考虑关键点的方向信息
-  // 统计当前帧 关键点的方向 到30步长 的方向直方图
-  // 保留方向直方图中最高的三个bin中 关键点 匹配的 地图点  匹配点对
-  /**
-  * @brief 通过词包，对参考关键帧的地图点进行跟踪
-  * 
-  * 通过bow对pKF和F中的点描述子 进行快速匹配（不属于同一node(词典单词)的特征点直接跳过匹配） \n
-  * 对属于同一node(词典单词)的特征点通过描述子距离进行匹配 \n
-  * 根据匹配，用参考关键帧pKF中特征点对应的MapPoint更新 当前帧F 中特征点对应的MapPoints \n
-  * 每个特征点都对应一个MapPoint，因此pKF中每个特征点的MapPoint也就是F中对应点的MapPoint \n
-  * 通过 距离阈值、比例阈值 和 角度投票进行剔除误匹配
-  * @param  pKF            KeyFrame           参考关键帧
-  * @param  F                 Current Frame  当前帧
-  * @param  vpMapPointMatches  当前帧 F中关键点 匹配到的地图点MapPoints ，NULL表示未匹配
-  * @return                   成功匹配的数量
-  */
+  
+	  /**
+	  * @brief Track the map points of the reference key frame through the bag of words
+	  * 
+	  * Quickly match the point descriptors in pKF and F through bow (feature points that do not belong to the same node (dictionary word) skip the matching directly) \n
+	  * Match feature points belonging to the same node (dictionary word) by descriptor distance \n
+	  * According to the matching, update the MapPoints corresponding to the feature points in the current frame F with the MapPoints corresponding to the feature points in the reference key frame pKF \n
+	  * Each feature point corresponds to a MapPoint, so the MapPoint of each feature point in pKF is also the MapPoint of the corresponding point in F \n
+	  * Eliminate false matches by distance threshold, scale threshold and angle voting
+	  * @param  pKF                KeyFrame           reference keyframe
+	  * @param  F                  Current Frame      current frame
+	  * @param  vpMapPointMatches  Map Points that match the key points in the current frame F, NULL means no match
+	  * @return                    number of successful matches
+	  */
 	int ORBmatcher::SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPointMatches)
 	{
-	    // 参考关键帧 的地图点
+	    // Map points with reference to keyframes
 	    const vector<MapPoint*> vpMapPointsKF = pKF->GetMapPointMatches();
-	    // 当前帧 关键点个数 个 匹配点 (对应原关键帧 中的地图点)
+	    // The number of key points in the current frame Matching points (corresponding to the map points in the original key frame)
 	    vpMapPointMatches = vector<MapPoint*>(F.N,static_cast<MapPoint*>(NULL));
-	    // 参考关键帧 的地图点 描述子 的特征向量
+	    // feature vector of the map point descriptor of the reference keyframe
 	    const DBoW2::FeatureVector &vFeatVecKF = pKF->mFeatVec;
 
 	    int nmatches=0;
 
-	    vector<int> rotHist[HISTO_LENGTH];// 方向向量 直方图
+	    vector<int> rotHist[HISTO_LENGTH];// Direction Vector Histogram
 	    for(int i=0;i<HISTO_LENGTH;i++)
 		rotHist[i].reserve(500);
 	    const float factor = 1.0f/HISTO_LENGTH;
 
 	    // We perform the matching over ORB that belong to the same vocabulary node (at a certain level)
-	    // 关键帧和 当前帧 均用 字典单词线性表示
-	    // 对应单词的 描述子 肯定比较相近 取对应单词的描述子进行匹配可以加速匹配
-	    // 将属于同一节点(特定层)的ORB特征进行匹配
-	    DBoW2::FeatureVector::const_iterator KFit = vFeatVecKF.begin();// 参考关键帧 特征点描述子 词典特征向量 开始
-	    DBoW2::FeatureVector::const_iterator Fit = F.mFeatVec.begin();// 当前帧 特征点描述子 词典特征向量 开始
-	    DBoW2::FeatureVector::const_iterator KFend = vFeatVecKF.end();// 参考关键帧 特征点描述子 词典特征向量 结束
-	    DBoW2::FeatureVector::const_iterator Fend = F.mFeatVec.end();// 当前帧 特征点描述子 词典特征向量 结束
+	    // Both the key frame and the current frame are represented linearly by dictionary words
+	    // The descriptors of the corresponding words must be relatively similar. Matching the descriptors of the corresponding words can speed up the matching
+	    // Match ORB features belonging to the same node (specific layer)
+	    DBoW2::FeatureVector::const_iterator KFit = vFeatVecKF.begin();// reference key frame feature point descriptor dictionary feature vector start
+	    DBoW2::FeatureVector::const_iterator Fit = F.mFeatVec.begin();// current frame feature point descriptor dictionary feature vector start
+	    DBoW2::FeatureVector::const_iterator KFend = vFeatVecKF.end();// Reference key frame Feature point descriptor Dictionary feature vector End
+	    DBoW2::FeatureVector::const_iterator Fend = F.mFeatVec.end();// The end of the current frame feature point descriptor dictionary feature vector
 
 	    while(KFit != KFend && Fit != Fend)
 	    {
-//步骤1：分别取出属于同一node的ORB特征点(只有属于同一node(单词)，才有可能是匹配点)  
-		if(KFit->first == Fit->first)// 同一个单词下的 描述子
+		//Step 1: Take out the ORB feature points belonging to the same node respectively (only those belonging to the same node (word) can be matching points) 
+		if(KFit->first == Fit->first)// Descriptors under the same word
 		{
 		    const vector<unsigned int> vIndicesKF = KFit->second;
 		    const vector<unsigned int> vIndicesF = Fit->second;
 		    
-// 步骤2：遍历关键帧KF中属于该node的地图点 其对应一个描述子
-		  for(size_t iKF=0; iKF < vIndicesKF.size(); iKF++)// 每一个参考 关键帧 地图点
+		  // Step 2: Traverse the map points belonging to the node in the key frame KF, which corresponds to a descriptor
+		  for(size_t iKF=0; iKF < vIndicesKF.size(); iKF++)// Each reference keyframe map point
 		    {
 			const unsigned int realIdxKF = vIndicesKF[iKF];
-			MapPoint* pMP = vpMapPointsKF[realIdxKF];// 取出KF中该特征对应的MapPoint
-			// 剔除 不好的地图点
+			MapPoint* pMP = vpMapPointsKF[realIdxKF];// Take out the MapPoint corresponding to the feature in KF
+			// Eliminate bad map points
 			if(!pMP)
 			    continue;
 			if(pMP->isBad())
 			    continue;    
-			// 取出关键帧KF中该特征对应的描述子
+			// Take out the descriptor corresponding to the feature in the key frame KF
 			const cv::Mat &dKF= pKF->mDescriptors.row(realIdxKF);  
 
-			int bestDist1=256;// 最好的距离（最小距离）
+			int bestDist1=256;// Best distance (minimum distance)
 			int bestIdxF =-1 ;
-			int bestDist2=256;// 最好的距离（最小距离）
+			int bestDist2=256;// Best distance (minimum distance)
 			
-// 步骤3：遍历当前帧 F 中属于该node的特征点，找到了最佳匹配点
-			for(size_t iF=0; iF<vIndicesF.size(); iF++)//每一个当前帧
+			// Step 3: Traverse the feature points belonging to the node in the current frame F and find the best matching point
+			for(size_t iF=0; iF<vIndicesF.size(); iF++)//every current frame
 			{
 			    const unsigned int realIdxF = vIndicesF[iF];
 			    
-			    // 表明这个特征点点已经被匹配过了，不再匹配，加快速度
+			    // Indicates that this feature point has been matched, no longer matched, speed up
 			    if(vpMapPointMatches[realIdxF])
 				continue;
-			    // 取出当前帧 F 中该特征对应的描述子
+			    // Take out the descriptor corresponding to the feature in the current frame F
 			    const cv::Mat &dF = F.mDescriptors.row(realIdxF); 
-			    const int dist =  DescriptorDistance(dKF,dF);// 描述子之间的 距离
+			    const int dist =  DescriptorDistance(dKF,dF);// distance between descriptors
 
-//  步骤4：找出最短距离和次短距离对应的 匹配点
+			    //  Step 4: Find the matching points corresponding to the shortest distance and the second shortest distance
 			    if(dist<bestDist1)// dist < bestDist1 < bestDist2，更新bestDist1 bestDist2
 			    {
 				bestDist2=bestDist1;// 次最短的距离
