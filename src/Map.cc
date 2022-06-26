@@ -20,7 +20,7 @@ void Map::AddKeyFrame(KeyFrame *pKF)
     unique_lock<mutex> lock(mMutexMap);
     mspKeyFrames.insert(pKF);// set collection, insert keyframes
     if(pKF->mnId > mnMaxKFid)// keyframe id
-        mnMaxKFid=pKF->mnId;// The id of the largest keyframe
+        mnMaxKFid=pKF->mnId;// the id of the largest keyframe
 }
 
 void Map::AddMapPoint(MapPoint *pMP)
