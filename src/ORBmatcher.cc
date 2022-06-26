@@ -901,40 +901,40 @@ namespace ORB_SLAM2
 
 			    if(!bStereo1 && !bStereo2)
 			    {
-			    // KF1 O1 投影到KF2像素坐标系上  ex  ey
+			    	// KF1 O1 is projected onto the KF2 pixel coordinate system ex ey
 				const float distex = ex - kp2.pt.x;
 				const float distey = ey - kp2.pt.y;
-				// 该特征点距离极点 太近，表明kp2对应的MapPoint距离pKF1相机太近
+				// The feature point is too close to the pole, indicating that the MapPoint corresponding to kp2 is too close to the pKF1 camera
 				if(distex*distex + distey*distey < 100 * pKF2->mvScaleFactors[kp2.octave])
 				    continue;
 			    }
 			    
-// 步骤4：计算特征点kp2 到 kp1极线（kp1对应pKF2的一条极线）的距离是否小于阈值
+			    // Step 4: Calculate whether the distance from the feature point kp2 to the kp1 polar line (kp1 corresponds to a polar line of pKF2) is less than the threshold
 			    if(CheckDistEpipolarLine(kp1,kp2,F12,pKF2))
 			    {
-				bestIdx2 = idx2;// 保留匹配点
+				bestIdx2 = idx2;// keep matching points
 				bestDist = dist;
 			    }
 			}
-	// 步骤1、2、3、4总结下来就是：将左图像的每个特征点与右图像同一node节点的所有特征点
-	// 依次检测，判断是否满足对极几何约束，满足约束就是匹配的特征点
-			if(bestIdx2 >= 0)// KF1 特征点 在 KF2中匹配点的下标 初始化为 -1
-			  // > 0  找到了匹配点
+			// Steps 1, 2, 3, and 4 are summed up as follows: each feature point of the left image and all feature points of the same node of the right image
+			// Check in turn to determine whether the epipolar geometric constraints are met. Satisfying the constraints is the matching feature point.
+			if(bestIdx2 >= 0)// The subscript of KF1 feature point matching point in KF2, initialized to -1
+			  // > 0  found a match
 			{
-			    const cv::KeyPoint &kp2 = pKF2->mvKeysUn[bestIdx2];// 匹配点在 KF2中的 像素坐标
+			    const cv::KeyPoint &kp2 = pKF2->mvKeysUn[bestIdx2];// Pixel coordinates of matching points in KF2
 			    vMatches12[idx1]=bestIdx2;
 			    nmatches++;
-// 步骤5：    匹配点 方向差 一致性约束
+			    // Step 5: Match Consistency Constraints for Point Orientation Differences
 			    if(mbCheckOrientation)
 			    {
-				float rot = kp1.angle-kp2.angle;// 匹配点 方向差
+				float rot = kp1.angle-kp2.angle;// Match point  Direction difference
 				if(rot<0.0)
 				    rot+=360.0f;
 				int bin = round(rot*factor);
 				if(bin==HISTO_LENGTH)
 				    bin=0;
 				assert(bin>=0 && bin<HISTO_LENGTH);
-				rotHist[bin].push_back(idx1);// 匹配点 方向差 直方图
+				rotHist[bin].push_back(idx1);// Match point  Direction difference  Histogram
 			    }
 			}
 		    }
@@ -952,23 +952,23 @@ namespace ORB_SLAM2
 		}
 	    }
 
-	// 根据方向差一致性约束 剔除误匹配的点
+	    // According to the consistency constraint of the direction difference, the incorrect matching points are eliminated
 	    if(mbCheckOrientation)
 	    {
 		int ind1=-1;
 		int ind2=-1;
 		int ind3=-1;
-	// 统计直方图最高的三个bin保留，其他范围内的匹配点剔除。
-	// 另外，若最高的比第二高的高10倍以上，则只保留最高的bin中的匹配点。
-	// 若最高的比第 三高的高10倍以上，则 保留最高的和第二高bin中的匹配点。
+		// The three highest bins in the statistical histogram are retained, and matching points in other ranges are eliminated.
+		// In addition, if the highest one is more than 10 times higher than the second highest, only the matching points in the highest bin are kept.
+		// If the highest is more than 10 times higher than the third, then keep the matching points in the highest and second highest bins.
 		ComputeThreeMaxima(rotHist,HISTO_LENGTH,ind1,ind2,ind3);
 
 		for(int i=0; i<HISTO_LENGTH; i++)
 		{
-		  // 方向差一致性最高的匹配点 保留
+		    // The matching point with the highest consistency of direction difference is retained
 		    if(i==ind1 || i==ind2 || i==ind3)
 			continue;
-		  // 其他匹配点 清除
+		  // Other match points clear
 		    for(size_t j=0, jend=rotHist[i].size(); j<jend; j++)
 		    {
 			vMatches12[rotHist[i][j]]=-1;
@@ -1618,66 +1618,66 @@ namespace ORB_SLAM2
 			if(vIndices2.empty())
 			    continue;
 			
-// 步骤5：遍历候选关键点  计算与地图点  描述子匹配 计算距离 保留最近距离的匹配
-			const cv::Mat dMP = pMP->GetDescriptor();// 上一帧地图点描述子
+			// Step 5: Traverse the candidate key points Calculate the matching with the map point descriptor Calculate the distance Keep the closest distance matching
+			const cv::Mat dMP = pMP->GetDescriptor();// Last frame map point descriptor
 			int bestDist = 256;
 			int bestIdx2 = -1;	
 			// vector<size_t>::const_iterator
 			for(auto vit=vIndices2.begin(), vend=vIndices2.end(); vit!=vend; vit++)
 			{
 			    const size_t i2 = *vit;
-			    if(CurrentFrame.mvpMapPoints[i2])// 如果当前帧关键帧有地图点
-				if(CurrentFrame.mvpMapPoints[i2]->Observations() > 0)//该对应地图点也有观测帧 则跳过
-				    continue;//跳过不用在匹配地图点
+			    if(CurrentFrame.mvpMapPoints[i2])// If the current frame keyframe has a map point
+				if(CurrentFrame.mvpMapPoints[i2]->Observations() > 0)//If the corresponding map point also has an observation frame, skip it
+				    continue;//Skip does not match map points
 				    
-                           // 双目和rgbd的情况，需要保证右图的点也在搜索半径以内
+                           // In the case of binocular and rgbd, it is necessary to ensure that the points on the right are also within the search radius
 			    if(CurrentFrame.mvuRight[i2]>0)
 			    {
-				const float ur = u - CurrentFrame.mbf*invzc;//匹配点 右图的横坐标
-				const float er = fabs(ur - CurrentFrame.mvuRight[i2]);// 误差
+				const float ur = u - CurrentFrame.mbf*invzc;//Matching point Abscissa of the right image
+				const float er = fabs(ur - CurrentFrame.mvuRight[i2]);// deviation
 				if(er > radius)
 				    continue;
 			    }
 
-			    const cv::Mat &d = CurrentFrame.mDescriptors.row(i2);// 当前帧 关键点描述子
-			    const int dist = DescriptorDistance(dMP,d);// 描述子匹配距离
+			    const cv::Mat &d = CurrentFrame.mDescriptors.row(i2);// current frame key descriptor
+			    const int dist = DescriptorDistance(dMP,d);// descriptor matching distance
 			    if(dist<bestDist)
 			    {
-				bestDist=dist;//最短的距离
-				bestIdx2=i2;// 对应的 当前帧关键点下标
+				bestDist=dist;//shortest distance
+				bestIdx2=i2;// Corresponding current frame key point subscript
 			    }
 			}
 
-			if(bestDist<=TH_HIGH)// 最短距离小于 <100
+			if(bestDist<=TH_HIGH)// The shortest distance is less than <100
 			{
-			    CurrentFrame.mvpMapPoints[bestIdx2]=pMP;// 为当前帧关键点匹配上一帧的地图点
+			    CurrentFrame.mvpMapPoints[bestIdx2]=pMP;// Match the map point of the previous frame for the key point of the current frame
 			    nmatches++;
-                         // 匹配点 观测方向差 一致性检测
+                         // Matching point Observation direction difference Consistency detection
 			    if(mbCheckOrientation)
-			    {                    // 上一帧 地图点的观测方向     -    当前帧 特征点 的观测方向              
-				float rot = LastFrame.mvKeysUn[i].angle - CurrentFrame.mvKeysUn[bestIdx2].angle; // 匹配点 观测方向差
+			    {                    // The observation direction of the map point in the previous frame - the observation direction of the feature point in the current frame             
+				float rot = LastFrame.mvKeysUn[i].angle - CurrentFrame.mvKeysUn[bestIdx2].angle; // Matching point Observation direction difference
 				if(rot<0.0)
 				    rot+=360.0f;
 				int bin = round(rot*factor);
 				if(bin==HISTO_LENGTH)
 				    bin=0;
 				assert(bin>=0 && bin<HISTO_LENGTH);
-				rotHist[bin].push_back(bestIdx2);//统计到对应的 方向直方图上
+				rotHist[bin].push_back(bestIdx2);//Statistics on the corresponding direction histogram
 			    }
 			}
 		    }
 		}
 	    }
-// 步骤6：根据方向差一致性约束 剔除误匹配的点
+	// Step 6: Eliminate the incorrectly matched points according to the direction difference consistency constraint
 	    //Apply rotation consistency
 	    if(mbCheckOrientation)
 	    {
 		int ind1=-1;
 		int ind2=-1;
 		int ind3=-1;
-	// 统计直方图最高的三个bin保留，其他范围内的匹配点剔除。
-	// 另外，若最高的比第二高的高10倍以上，则只保留最高的bin中的匹配点。
-	// 若最高的比第 三高的高10倍以上，则 保留最高的和第二高bin中的匹配点。
+	// The three highest bins in the statistical histogram are retained, and matching points in other ranges are eliminated.
+	// In addition, if the highest one is more than 10 times higher than the second highest, only the matching points in the highest bin are kept.
+	// If the highest is more than 10 times higher than the third, then keep the matching points in the highest and second highest bins.
 		ComputeThreeMaxima(rotHist,HISTO_LENGTH,ind1,ind2,ind3);
 
 		for(int i=0; i<HISTO_LENGTH; i++)
@@ -1696,37 +1696,20 @@ namespace ORB_SLAM2
 	    return nmatches;
 	}
 
-	// 
-	// 在 关键帧地图点对应的描述子和 当前帧关键点描述子匹配后的 匹配点数少
-	// 把 关键帧地图点 根据当前帧个世界的变换关系 转换到当前帧坐标系下
-	// 再根据相机内参数K投影到当前帧的像素坐标系下
-	// 根据像素坐标所处的 格子区域 和估算的金字塔层级信息 得到和地图点匹配的  当前帧 候选特征点
-	// 计算匹配距离
-
-	// 1. 获取pKF对应的地图点vpMPs，遍历
-	//     (1). 若该点为NULL、isBad或者在SearchByBow中已经匹配上（Relocalization中首先会通过SearchByBow匹配一次），抛弃；
-	// 2. 通过当前帧的位姿，将世界坐标系下的地图点坐标转换为当前帧坐标系（相机坐标系）下的坐标
-	//     (2). 投影点(u,v)不在畸变矫正过的图像范围内，地图点的距离dist3D不在地图点的可观测距离内（根据地图点对应的金字塔层数，
-	//           也就是提取特征的neighbourhood尺寸），抛弃
-	// 3. 通过地图点的距离dist3D，预测特征对应金字塔层nPredictedLevel，并获取搜索window大小（th*scale），在以上约束的范围内，
-	//    搜索得到候选匹配点集合向量vIndices2
-	//     const vector<size_t> vIndices2 = CurrentFrame.GetFeaturesInArea(u, v, radius, nPredictedLevel-1, nPredictedLevel+1);
-	// 4. 计算地图点的描述子和候选匹配点描述子距离，获得最近距离的最佳匹配，但是也要满足距离<ORBdist。
-	// 5. 最后，还需要通过直方图验证描述子的方向是否匹配
-/**
- * @brief 通过投影，对上一参考关键帧的特征点(地图点)进行跟踪
- * 重定位模式中的 跟踪关键帧模式    重定位中先通过 SearchByBow 在关键帧数据库中找到候选关键帧  再与每一个 参考关键帧匹配 找的匹配效果最好的 完成定位
- * 上一参考关键帧中包含了MapPoints，对这些MapPoints进行跟踪tracking，由此增加当前帧的MapPoints \n
- * 1. 将上一参考关键帧的MapPoints投影到当前帧 
- * 2. 在投影点附近根据描述子距离选取匹配，以及最终的方向投票机制进行剔除
- * @param  CurrentFrame   当前帧
- * @param  pKF                    上一帧参考关键帧
- * @param  sAlreadyFound 当前帧关键点匹配到地图点的情况
- * @param  th                       搜索半径参数
- * @param  ORBdist             匹配距离阈值
- * @return                             成功匹配的数量
- * @see SearchByBoW()
- */		
+	/**
+	 * @brief Through projection, the feature points (map points) of the previous reference key frame are tracked
+	 * Tracking Keyframe Mode in Retarget Mode    In relocation, first find candidate keyframes in the keyframe database through SearchByBow, and then match each reference keyframe to find the best matching effect to complete the positioning
+	 * The previous reference key frame contains MapPoints, and these MapPoints are tracked, thereby increasing the MapPoints of the current frame \n
+	 * 1. Project the MapPoints of the previous reference keyframe to the current frame
+	 * 2. Select matching according to the descriptor distance near the projection point, and eliminate the final direction voting mechanism
+	 * @param  CurrentFrame           current frame
+	 * @param  pKF                    previous frame reference keyframe
+	 * @param  sAlreadyFound          the current frame key point is matched to the map point
+	 * @param  th                     search radius parameter
+	 * @param  ORBdist                match distance threshold
+	 * @return                        number of successful matches
+	 * @see SearchByBoW()
+	 */		
 	int ORBmatcher::SearchByProjection(Frame &CurrentFrame, KeyFrame *pKF, const set<MapPoint*> &sAlreadyFound, const float th , const int ORBdist)
 	{
 	    int nmatches = 0;
