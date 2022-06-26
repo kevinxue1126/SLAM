@@ -1506,19 +1506,19 @@ namespace ORB_SLAM2
 	    }
 
 	    // Check agreement
-// 步骤5 检查两者的匹配 是否对应起来  
+	    // Step 5: Check whether the two match 
 	    int nFound = 0;
 
 	    for(int i1=0; i1<N1; i1++)
 	    {
-		int idx2 = vnMatch1[i1];// 帧1  地图点 匹配到的 帧2 的关键点(也对应一个地图点) 下标
+		int idx2 = vnMatch1[i1];// The key point of frame 2 (also corresponding to a map point) matched by the map point of frame 1 is subscripted
 
-		if(idx2>=0)// 帧1  地图点 匹配到的 帧2 关键点 下标
+		if(idx2>=0)// The frame 2 key point subscript matched by the map point of frame 1
 		{
-		    int idx1 = vnMatch2[idx2];// 帧2 关键点  对应的 帧1 地图点下标
-		    if(idx1==i1)// 匹配 相互符合
+		    int idx1 = vnMatch2[idx2];// The subscript of the frame 1 map point corresponding to the frame 2 key point
+		    if(idx1==i1)// match with each other
 		    {
-			vpMatches12[i1] = vpMapPoints2[idx2];// 更新帧1 在帧2 中匹配的 地图点
+			vpMatches12[i1] = vpMapPoints2[idx2];// Update the map point that frame 1 matches in frame 2
 			nFound++;
 		    }
 		}
@@ -1527,90 +1527,85 @@ namespace ORB_SLAM2
 	    return nFound;
 	}
 	
-
-	// b. 匹配上一帧的地图点，即前后两帧匹配，用于TrackWithMotionModel
-	//运动模型（Tracking with motion model）跟踪   速率较快  假设物体处于匀速运动
-	// 用 上一帧的位姿和速度来估计当前帧的位姿使用的函数为TrackWithMotionModel()。
-	//这里匹配是通过投影来与上一帧看到的地图点匹配，使用的是matcher.SearchByProjection()。
-/**
- * @brief 通过投影，对上一帧的特征点(地图点)进行跟踪
- * 运动跟踪模式
- * 上一帧中包含了MapPoints，对这些MapPoints进行跟踪tracking，由此增加当前帧的MapPoints \n
- * 1. 将上一帧的MapPoints投影到当前帧(根据速度模型可以估计当前帧的Tcw)
- * 2. 在投影点附近根据描述子距离选取匹配，以及最终的方向投票机制进行剔除
- * @param  CurrentFrame 当前帧
- * @param  LastFrame       上一帧
- * @param  th                      搜索半径参数
- * @param  bMono             是否为单目
- * @return                           成功匹配的数量
- * @see SearchByBoW()
- */	
+	
+	/**
+	 * @brief Through projection, the feature points (map points) of the previous frame are tracked
+	 * Through projection, the feature points (map points) of the previous frame are tracked
+	 * The previous frame contains MapPoints, and these MapPoints are tracked, thereby increasing the MapPoints of the current frame \n
+	 * 1. Project the MapPoints of the previous frame to the current frame (the Tcw of the current frame can be estimated according to the velocity model)
+	 * 2. Select matching according to the descriptor distance near the projection point, and eliminate the final direction voting mechanism
+	 * @param  CurrentFrame      current frame
+	 * @param  LastFrame         previous frame
+	 * @param  th                search radius parameter
+	 * @param  bMono             is it monocular
+	 * @return                   number of successful matches
+	 * @see SearchByBoW()
+	 */	
 	int ORBmatcher::SearchByProjection(Frame &CurrentFrame, const Frame &LastFrame, const float th, const bool bMono)
 	{
 	    int nmatches = 0;
-// 步骤1：变量初始化----------------------------------------------------------
+	    // Step 1: Variable initialization
 	    // Rotation Histogram (to check rotation consistency)
-	   // 匹配点 观测方向差 直方图 统计 用来筛选 最好的 匹配
+	   // The histogram statistics of the observed direction difference of the matching points are used to filter the best matches
 	    vector<int> rotHist[HISTO_LENGTH];
 	    for(int i=0;i<HISTO_LENGTH;i++)
 		rotHist[i].reserve(500);
 	    const float factor = 1.0f/HISTO_LENGTH;
 
-	 // 当前帧 旋转 平移矩阵	    
+	    // current frame rotation translation matrix
 	    const cv::Mat Rcw = CurrentFrame.mTcw.rowRange(0,3).colRange(0,3);
 	    const cv::Mat tcw = CurrentFrame.mTcw.rowRange(0,3).col(3);
 	    const cv::Mat twc = -Rcw.t()*tcw;// // twc(w)
-	// 上一帧 旋转 平移矩阵
+	    // Previous Frame Rotation Translation Matrix
 	    const cv::Mat Rlw = LastFrame.mTcw.rowRange(0,3).colRange(0,3);
 	    const cv::Mat tlw = LastFrame.mTcw.rowRange(0,3).col(3);
-	    const cv::Mat tlc = Rlw*twc + tlw;//当前帧到上一帧的 平移向量
+	    const cv::Mat tlc = Rlw*twc + tlw;//Translation vector from the current frame to the previous frame
 	    
-	// 判断前进还是后退
+	    // Decide whether to go forward or backward
 	    const bool bForward = tlc.at<float>(2) > CurrentFrame.mb && !bMono;
-	     // 非单目情况，如果Z>0且大于基线，则表示前进
-	    
+	     // Non-monocular case, if Z>0 and greater than the baseline, it means forward
 	    const bool bBackward = -tlc.at<float>(2) > CurrentFrame.mb && !bMono;
-	    // 非单目情况，如果Z<0,且绝对值大于基线，则表示前进
+	    // Non-monocular case, if Z<0, and the absolute value is greater than the baseline, it means forward
 	    
-// 步骤2：遍历 上一帧 所有的关键点(对应 地图点)-------------------------------------------
+	    // Step 2: Traverse all key points in the previous frame (corresponding to map points)
 	    for(int i=0; i<LastFrame.N; i++)
 	    {
-		MapPoint* pMP = LastFrame.mvpMapPoints[i];//上一帧  地图点
+		MapPoint* pMP = LastFrame.mvpMapPoints[i];//previous frame map point
 
-		if(pMP)// 地图点存在
+		if(pMP)// map point exists
 		{
-		    if(!LastFrame.mvbOutlier[i])// 该地图点也不是外点 是内点 复合变换关系的点
+		    if(!LastFrame.mvbOutlier[i])// The map point is also not an outer point but an inner point compound transformation relation point
 		    {
 			// Project
-// 步骤3： 上一帧  地图点 投影到 当前帧 像素平面上-----------------------------------------    
-			cv::Mat x3Dw = pMP->GetWorldPos();// 上一帧地图点（世界坐标系下）
-			cv::Mat x3Dc = Rcw*x3Dw+tcw;//上一帧地图点（当前帧坐标系下）
+			// Step 3: Project the map points of the previous frame to the pixel plane of the current frame
+			cv::Mat x3Dw = pMP->GetWorldPos();// The map point of the previous frame (under the world coordinate system)
+			cv::Mat x3Dc = Rcw*x3Dw+tcw;// The map point of the previous frame (under the current frame coordinate system)
 			const float xc = x3Dc.at<float>(0);
 			const float yc = x3Dc.at<float>(1);
-			const float invzc = 1.0/x3Dc.at<float>(2);// 深度>0 逆深度>0
+			const float invzc = 1.0/x3Dc.at<float>(2);// depth>0 inverse depth>0
 			if(invzc<0)
 			    continue;
 			float u = CurrentFrame.fx*xc*invzc+CurrentFrame.cx;
 			float v = CurrentFrame.fy*yc*invzc+CurrentFrame.cy;
 			if(u<CurrentFrame.mnMinX || u>CurrentFrame.mnMaxX)
-			    continue;// 需要在 图像尺寸内
+			    continue;// needs to be within the image size
 			if(v<CurrentFrame.mnMinY || v>CurrentFrame.mnMaxY)
 			    continue;
 
-// 步骤4： 在当前帧上确定候选点-----------------------------------------------------			
-			// NOTE 尺度越大,图像越小
-			// 以下可以这么理解，例如一个有一定面积的圆点，在某个尺度n下它是一个特征点
-			// 当前进时，圆点的面积增大，在某个尺度m下它是一个特征点，由于面积增大，则需要在更高的尺度下才能检测出来
-			// 因此m>=n，对应前进的情况，nCurOctave>=nLastOctave。后退的情况可以类推
-			int nLastOctave = LastFrame.mvKeys[i].octave;//  上一帧  地图点 对应特征点所处的 尺度(金字塔层数)
+			// Step 4: Determine candidate points on the current frame		
+			// NOTE The larger the scale, the smaller the image
+			// The following can be understood as follows. For example, a dot with a certain area is a feature point at a certain scale n.
+			// When moving forward, the area of the dot increases. At a certain scale m, it is a feature point. Due to the increased area, it needs to be detected at a higher scale.
+			// Therefore, m>=n, corresponding to the forward situation, nCurOctave>=nLastOctave. The case of going backward can be deduced by analogy
+			int nLastOctave = LastFrame.mvKeys[i].octave;//  The scale at which the feature point corresponds to the map point of the previous frame (the number of pyramid layers)
 			// Search in a window. Size depends on scale
-			float radius = th * CurrentFrame.mvScaleFactors[nLastOctave];//尺度越大，搜索范围越大
-			vector<size_t> vIndices2;// 当前帧 上 投影点附近的 候选点
-			if(bForward)// 前进,则上一帧兴趣点在所在的尺度nLastOctave <= nCurOctave< 8(更近了 尺度大 层数高也可以看见)
+			float radius = th * CurrentFrame.mvScaleFactors[nLastOctave];//The larger the scale, the larger the search range
+			vector<size_t> vIndices2;// Candidate points near the projected point on the current frame
+			if(bForward)// Moving forward, the interest point of the previous frame is at the scale nLastOctave <= nCurOctave < 8 (closer, large scale, high layer number can also be seen)
 			    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, nLastOctave);
-			else if(bBackward)// 后退,则上一帧兴趣点在所在的尺度0<= nCurOctave <= nLastOctave（远了 尺度降低）
+			else if(bBackward)// Backwards, the interest point in the previous frame is at the scale 0<= nCurOctave <= nLastOctave (far away, the scale is reduced)
 			    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, 0, nLastOctave);
-			else// 没怎么运动 在上一帧 尺度附加搜索
+			else// Not much motion Additional search at previous frame scale
 			    vIndices2 = CurrentFrame.GetFeaturesInArea(u,v, radius, nLastOctave-1, nLastOctave+1);
 			if(vIndices2.empty())
 			    continue;
