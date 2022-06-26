@@ -113,9 +113,9 @@ namespace ORB_SLAM2
 			if(F.mvpMapPoints[idx]->Observations() > 0)//Skip if observation frame is already found
 			    continue;
 		    // The error between the tracked matching point coordinates and the actual stereo matching is too large, skipping
-		    if(F.mvuRight[idx]>0)// 双目 / 深度相机
+		    if(F.mvuRight[idx]>0)// Binocular / depth camera
 		    {
-			const float er = fabs(pMP->mTrackProjXR  -  F.mvuRight[idx]);//
+			const float er = fabs(pMP->mTrackProjXR  -  F.mvuRight[idx]);
 			if(er > r*F.mvScaleFactors[nPredictedLevel])// The error between the tracked matching point coordinates and the actual stereo matching is too large
 			    continue;
 		    }
@@ -663,7 +663,7 @@ namespace ORB_SLAM2
 
 	    int nmatches = 0;
 	    
-	  // 将属于同一节点(特定层)的ORB特征进行匹配
+	    // Match ORB features belonging to the same node (specific layer)
 	    DBoW2::FeatureVector::const_iterator f1it = vFeatVec1.begin();
 	    DBoW2::FeatureVector::const_iterator f2it = vFeatVec2.begin();
 	    DBoW2::FeatureVector::const_iterator f1end = vFeatVec1.end();
@@ -671,76 +671,75 @@ namespace ORB_SLAM2
 
 	    while(f1it != f1end && f2it != f2end)
 	    {
-//步骤1：分别取出属于同一node的ORB特征点(只有属于同一node，才有可能是匹配点)     
+		// Step 1: Take out the ORB feature points belonging to the same node respectively (only those belonging to the same node can be matching points)  
 		if(f1it->first == f2it->first)
 		{
-// 步骤2：遍历KF1中属于该node的特征点	  
+		    // Step 2: Traverse the feature points belonging to the node in KF1	  
 		    for(size_t i1=0, iend1=f1it->second.size(); i1 < iend1; i1++)
 		    {
 			const size_t idx1 = f1it->second[i1];
-		      // 取出KF1 中该特征对应的 地图点MapPoint
+		        // Take out the map point MapPoint corresponding to the feature in KF1
 			MapPoint* pMP1 = vpMapPoints1[idx1];
-			// 没有匹配的地图点跳过
+			// No matching map points to skip
 			if(!pMP1)
 			    continue;
-			// 是坏点 跳过
+			// is a bad point continue
 			if(pMP1->isBad())
 			    continue;
-		    // 取出KF1中该特征对应的描述子
+		    	// Take out the descriptor corresponding to the feature in KF1
 			const cv::Mat &d1 = Descriptors1.row(idx1);
-			int bestDist1=256;// 最好的距离（最小距离）
+			int bestDist1=256;// Best distance (minimum distance)
 			int bestIdx2 =-1 ;
-			int bestDist2=256; // 倒数第二好距离（倒数第二小距离）
+			int bestDist2=256; // The penultimate best distance (the penultimate shortest distance)
 			
-// 步骤3：遍历KF2中属于该node的特征点，找到了最佳匹配点
+			// Step 3: Traverse the feature points belonging to the node in KF2 and find the best matching point
 			for(size_t i2=0, iend2=f2it->second.size(); i2<iend2; i2++)
 			{
 			    const size_t idx2 = f2it->second[i2];
-			  // 对应 的 地图点
+			    // corresponding map point
 			    MapPoint* pMP2 = vpMapPoints2[idx2];
-		      // 已经和 KF1 中某个点匹配过了 跳过  或者 该特征点 无匹配地图点 或者 该地图点是坏点  跳过
 			    if(vbMatched2[idx2] || !pMP2)
 				continue;
 			    if(pMP2->isBad())
 				continue;
-// 步骤4：求描述子的距离 保留最小和次小距离对应的 匹配点
-			    const cv::Mat &d2 = Descriptors2.row(idx2);// 取出F中该特征对应的描述子
+			    // Step 4: Find the distance of the descriptor and keep the matching points corresponding to the smallest and second smallest distances
+			    const cv::Mat &d2 = Descriptors2.row(idx2);// Take out the descriptor corresponding to the feature in F
 			    int dist = DescriptorDistance(d1,d2);
-			    if(dist<bestDist1)// dist < bestDist1 < bestDist2，更新bestDist1 bestDist2
+			    if(dist<bestDist1)// dist < bestDist1 < bestDist2，update bestDist1 bestDist2
 			    {
 				bestDist2=bestDist1;
-				bestDist1=dist;// 最段的距离
-				bestIdx2=idx2;// 对应  KF2 地图点 下标
+				bestDist1=dist;// the longest distance
+				bestIdx2=idx2;// Corresponding to KF2 map point subscript
 			    }
-			    else if(dist<bestDist2)// bestDist1 < dist < bestDist2，更新bestDist2
+			    else if(dist<bestDist2)// bestDist1 < dist < bestDist2，update bestDist2
 			    {
-				bestDist2=dist;// 次短的距离
+				bestDist2=dist;// next shortest distance
 			    }
 			}
 			
-// 步骤4：根据阈值 和 角度投票剔除误匹配
+			// Step 4: Voting out false matches based on threshold and angle
 			if(bestDist1<TH_LOW)
 			{
 			    // trick!
-			    // 最佳匹配比次佳匹配明显要好，那么最佳匹配才真正靠谱
+			    // The best match is obviously better than the next best match, then the best match is really reliable
 			    if(static_cast<float>(bestDist1) < mfNNratio*static_cast<float>(bestDist2))
 			    {
-				vpMatches12[idx1]=vpMapPoints2[bestIdx2];// 匹配到的 对应  KF2 中的 地图点 
-				vbMatched2[bestIdx2]=true;// KF2 中的地图点 已经和 KF1中的某个地图点匹配
+				vpMatches12[idx1]=vpMapPoints2[bestIdx2];// The matched map point in KF2 
+				vbMatched2[bestIdx2]=true;// The map point in KF2 has been matched with a map point in KF1
 
 				if(mbCheckOrientation)
 				{
 				  // trick!
-				  // angle：每个特征点在提取描述子时的旋转主方向角度，如果图像旋转了，这个角度将发生改变
-				  // 所有的特征点的角度变化应该是一致的，通过直方图统计得到最准确的角度变化值
-				    float rot = vKeysUn1[idx1].angle - vKeysUn2[bestIdx2].angle;//匹配点方向差
+				    // angle：The rotation main direction angle of each feature point when extracting the descriptor, if the image is rotated, this angle will change
+				    // The angle change of all feature points should be consistent, and the most accurate angle change value is obtained through histogram statistics
+				    float rot = vKeysUn1[idx1].angle - vKeysUn2[bestIdx2].angle;//Match point direction difference
 				    if(rot<0.0)
 					rot+=360.0f;
 				    int bin = round(rot*factor);
 				    if(bin==HISTO_LENGTH)
 					bin=0;
 				    assert(bin>=0 && bin<HISTO_LENGTH);
-				    rotHist[bin].push_back(idx1);//匹配点方向差 直方图
+				    rotHist[bin].push_back(idx1);//Match point direction difference histogram
 				}
 				nmatches++;
 			    }
@@ -760,25 +759,25 @@ namespace ORB_SLAM2
 		}
 	    }
 	    
-// 根据方向差一致性约束 剔除误匹配的点
+	    // According to the consistency constraint of the direction difference, the incorrect matching points are eliminated
 	    if(mbCheckOrientation)
 	    {
 		int ind1=-1;
 		int ind2=-1;
 		int ind3=-1;
-	// 统计直方图最高的三个bin保留，其他范围内的匹配点剔除。
-	// 另外，若最高的比第二高的高10倍以上，则只保留最高的bin中的匹配点。
-	// 若最高的比第 三高的高10倍以上，则 保留最高的和第二高bin中的匹配点。
+		// The three highest bins in the statistical histogram are retained, and matching points in other ranges are eliminated.
+		// In addition, if the highest one is more than 10 times higher than the second highest, only the matching points in the highest bin are kept.
+		// If the highest is more than 10 times higher than the third, then keep the matching points in the highest and second highest bins.
 		ComputeThreeMaxima(rotHist,HISTO_LENGTH,ind1,ind2,ind3);
 
 		for(int i=0; i<HISTO_LENGTH; i++)
 		{
-		  // 如果特征点的旋转角度变化量属于这三个组，则保留 该匹配点对
+		    // If the rotation angle variation of the feature point belongs to these three groups, keep the matching point pair
 		    if(i==ind1 || i==ind2 || i==ind3)
 			continue;
 		    for(size_t j=0, jend=rotHist[i].size(); j<jend; j++)
 		    {
-		      // 将除了ind1 ind2 ind3以外的匹配点去掉
+		        // Remove the matching points except ind1, ind2, ind3
 			vpMatches12[rotHist[i][j]] =static_cast<MapPoint*>(NULL);
 			nmatches--;
 		    }
@@ -789,118 +788,115 @@ namespace ORB_SLAM2
 	}
 
 
-  /**
-  * @brief 利用基本矩阵F12，在两个关键帧之间  两帧特征点均未有匹配的地图点 中 产生 2d-2d 匹配点对  
-  * 关键帧1的每个特征点 与 关键帧2 特征点 同属于 词典同一个node(包含多的类似单词) 
-  * 节点下的 特征点进行描述子匹配，在符合对极几何约束的条件下，选择距离最近的匹配
-  * 最后在进行 匹配点 方向差 一致性约束 检测 去除一些误匹配
-  * @param pKF1          关键帧1
-  * @param pKF2          关键帧2
-  * @param F12            基础矩阵F    p2转置 × F  × p1 = 0
-  * @param vMatchedPairs 存储匹配特征点对，特征点用其在关键帧中的索引表示
-  * @param bOnlyStereo     在双目和rgbd情况下，要求特征点在右图存在匹配
-  * @return                            成功匹配的数量
-  */
+	  /**
+	  * @brief Using the fundamental matrix F12, a 2d-2d matching point pair is generated between the two keyframes and the map points where the feature points of the two frames are not matched 
+	  * Each feature point of key frame 1 and the feature point of key frame 2 belong to the same node of the dictionary (including many similar words)
+	  * The feature points under the node are matched with descriptors, and the closest matching distance is selected under the condition that the epipolar geometric constraints are met
+	  * 最After matching points, direction difference consistency constraints, detection and removal of some mismatches
+	  * @param pKF1          keyframe 1
+	  * @param pKF2          keyframe 2
+	  * @param F12           fundamental matrix F    p2 transpose × F  × p1 = 0
+	  * @param vMatchedPairs Store matching feature point pairs, the feature points are represented by their indices in the keyframe
+	  * @param bOnlyStereo   In the case of binocular and rgbd, the feature points are required to have matching in the right image
+	  * @return              Number of successful matches
+	  */
 	int ORBmatcher::SearchForTriangulation(KeyFrame *pKF1, KeyFrame *pKF2, cv::Mat F12,
 					      vector<pair<size_t, size_t> > &vMatchedPairs, const bool bOnlyStereo)
 	{    
-	    const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;// 关键帧pKF1  描述子 的 词典向量表示
-	    const DBoW2::FeatureVector &vFeatVec2 = pKF2->mFeatVec;// 关键帧pKF2  描述子 的 词典向量表示
+	    const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;// Dictionary vector representation of keyframe pKF1 descriptors
+	    const DBoW2::FeatureVector &vFeatVec2 = pKF2->mFeatVec;// Dictionary vector representation of keyframe pKF2 descriptors
 
 	    //Compute epipole in second image
-	// 计算KF1的相机中心在KF2图像平面的坐标，即极点坐标   
-	    cv::Mat Cw = pKF1->GetCameraCenter();// KF1 O1 世界坐标系下
-	    cv::Mat R2w = pKF2->GetRotation();// 世界坐标系 -----> KF2 旋转矩阵
-	    cv::Mat t2w = pKF2->GetTranslation();// 世界坐标系 -----> KF2 平移向量
-	    cv::Mat C2 = R2w*Cw+t2w;// KF1 O1 在 KF2坐标系下坐标
-	    const float invz = 1.0f/C2.at<float>(2);//深度归一化坐标
-	    // KF1 O1 投影到KF2像素坐标系上
-	    const float ex =pKF2->fx * C2.at<float>(0) * invz + pKF2->cx;//
-	    const float ey =pKF2->fy * C2.at<float>(1) * invz + pKF2->cy;//
+	    // Calculate the coordinates of the camera center of KF1 in the KF2 image plane, that is, the coordinates of the pole
+	    cv::Mat Cw = pKF1->GetCameraCenter();// In the KF1 O1 world coordinate system
+	    cv::Mat R2w = pKF2->GetRotation();// World coordinate system -----> KF2 rotation matrix
+	    cv::Mat t2w = pKF2->GetTranslation();// World coordinate system -----> KF2 translation vector
+	    cv::Mat C2 = R2w*Cw+t2w;// The coordinates of KF1 O1 in the KF2 coordinate system
+	    const float invz = 1.0f/C2.at<float>(2);//depth normalized coordinates
+	    // KF1 O1 is projected onto the KF2 pixel coordinate system
+	    const float ex =pKF2->fx * C2.at<float>(0) * invz + pKF2->cx;
+	    const float ey =pKF2->fy * C2.at<float>(1) * invz + pKF2->cy;
 
 	    // Find matches between not tracked keypoints
 	    // Matching speed-up by ORB Vocabulary
 	    // Compare only ORB that share the same node
-
 	    int nmatches=0;
-	    vector<bool> vbMatched2(pKF2->N,false);// pKF2 关键帧2  地图点是否被 pKF1 地图点匹配标志
-	    vector<int> vMatches12(pKF1->N,-1);// 帧1 pKF1 地图点 在pKF2中的 匹配 地图点
+	    vector<bool> vbMatched2(pKF2->N,false);// Whether the pKF2 keyframe 2 map point is marked by the pKF1 map point match
+	    vector<int> vMatches12(pKF1->N,-1);// Frame 1 pKF1 map points match map points in pKF2
 
-	    // 匹配点 方向差 一致性约束
+	    // Match Points, Orientation Differences and Consistency Constraints
 	    vector<int> rotHist[HISTO_LENGTH];
 	    for(int i=0;i<HISTO_LENGTH;i++)
 		rotHist[i].reserve(500);
 	    const float factor = 1.0f/HISTO_LENGTH;
 	    
-	    // 将属于同一节点(特定层)的ORB特征进行匹配
-	    // FeatureVector的数据结构类似于：{(node1,feature_vector1) (node2,feature_vector2)...}
-	    // f1it->first对应node编号，f1it->second对应属于该node的所有特特征点编号
+	    // Match ORB features belonging to the same node (specific layer)
+	    // The data structure of FeatureVector is similar to: {(node1,feature_vector1) (node2,feature_vector2)...}
+	    // f1it->first corresponds to the node number, and f1it->second corresponds to the number of all feature points belonging to the node
 	    DBoW2::FeatureVector::const_iterator f1it = vFeatVec1.begin();
 	    DBoW2::FeatureVector::const_iterator f2it = vFeatVec2.begin();
 	    DBoW2::FeatureVector::const_iterator f1end = vFeatVec1.end();
 	    DBoW2::FeatureVector::const_iterator f2end = vFeatVec2.end();
 	    
-// 步骤1：遍历pKF1和pKF2中词典线性表示的特征向量树中 的node节点
+	    // Step 1: Traverse the node nodes in the feature vector tree of the linear representation of the dictionary in pKF1 and pKF2
 	    while(f1it!=f1end && f2it!=f2end)
 	    {
-	      // 如果f1it和f2it属于同一个node节点
-	      // 分别取出属于同一node的ORB特征点(只有属于同一node，才有可能是匹配点)     
+	        // If f1it and f2it belong to the same node
+	        // Take out the ORB feature points belonging to the same node respectively (only if they belong to the same node, can they be matching points)    
 		if(f1it->first == f2it->first)
 		{
-// 步骤2：遍历该node节点下关键帧1 pKF1 (f1it->first)的所有特征点	  
+		    // Step 2: Traverse all feature points of key frame 1 pKF1 (f1it->first) under the node node	  
 		    for(size_t i1=0, iend1=f1it->second.size(); i1<iend1; i1++)
 		    {
-			// 获取pKF1中属于该node节点的所有特征点索引
+			// Get the indices of all feature points belonging to the node in pKF1
 			const size_t idx1 = f1it->second[i1];
-		// 步骤2.1：通过特征点索引idx1在pKF1中取出对应的 地图点 MapPoint      
+			// Step 2.1: Take out the corresponding map point MapPoint in pKF1 through the feature point index idx1      
 			MapPoint* pMP1 = pKF1->GetMapPoint(idx1);    
 			// If there is already a MapPoint skip
-			// 特征点已经存在 地图点不用计算了 直接跳过
-			// 由于寻找的是未匹配的特征点，所以pMP1应该为NULL
+			// The feature point already exists, the map point does not need to be calculated and skipped directly
+			// Since it is looking for unmatched feature points, pMP1 should be NULL
 			if(pMP1)
 			    continue;
-			// 如果mvuRight（右图像 有匹配点）中的值大于0，表示是双目/深度 ，且该特征点有深度值
+			// If the value in mvuRight (right image has a matching point) is greater than 0, it means binocular/depth, and the feature point has a depth value
 			const bool bStereo1 = pKF1->mvuRight[idx1] >= 0;
 			if(bOnlyStereo)
 			    if(!bStereo1)
-				continue;// 非双目/深度 跳过
-		  // 步骤2.2：通过特征点索引idx1在pKF1中取出对应的特征点     
+				continue;
+		  	// Step 2.2: Take out the corresponding feature point in pKF1 through the feature point index idx1     
 			const cv::KeyPoint &kp1 = pKF1->mvKeysUn[idx1];
 			
-		  // 步骤2.3：通过特征点索引idx1在pKF1中取出对应的特征点的描述子	
+		  	// Step 2.3: Extract the descriptor of the corresponding feature point in pKF1 through the feature point index idx1	
 			const cv::Mat &d1 = pKF1->mDescriptors.row(idx1);
 			
 			int bestDist = TH_LOW;//50
-			int bestIdx2 = -1;//匹配点 下标
-// 步骤3：遍历该node节点下关键帧2 pKF2 (f2it->first)的所有特征点         
+			int bestIdx2 = -1;//matching point subscript
+			// Step 3: Traverse all feature points of key frame 2 pKF2 (f2it->first) under the node node         
 			for(size_t i2=0, iend2=f2it->second.size(); i2<iend2; i2++)
 			{
-			  // 获取pKF2中属于该node节点的所有特征点索引
+			    // Get the indices of all feature points belonging to the node in pKF2
 			    size_t idx2 = f2it->second[i2];
 			    
-		      // 步骤3.1：通过特征点索引idx2在pKF2中取出对应的MapPoint  
+		      	    // Step 3.1: Take out the corresponding MapPoint in pKF2 through the feature point index idx2  
 			    MapPoint* pMP2 = pKF2->GetMapPoint(idx2);      
 			    // If we have already matched or there is a MapPoint skip
-			    // 如果关键帧2 pKF2当前特征点索引idx2已经被匹配过或者对应的3d点非空
-			    // 那么这个索引idx2就不能被考虑
 			    if(vbMatched2[idx2] || pMP2)
-				continue;// pMP2 的特征点 也不能有匹配的地图点 有的话 就已经匹配过了 生成了地图点了
-			    // 如果mvuRight（右图像 有匹配点）中的值大于0，表示是双目/深度 ，且该特征点有深度值
+				continue;
+			    // If the value in mvuRight (right image has a matching point) is greater than 0, it means binocular/depth, and the feature point has a depth value
 			    const bool bStereo2 = pKF2->mvuRight[idx2]>=0;
 			    if(bOnlyStereo)
 				if(!bStereo2)
 				    continue;
 				
-		    // 步骤3.2：通过特征点索引idx2在pKF2中取出对应的特征点的描述子        
+		    	    // Step 3.2: Extract the descriptor of the corresponding feature point in pKF2 through the feature point index idx2      
 			    const cv::Mat &d2 = pKF2->mDescriptors.row(idx2);
 			    
-		    // 计算idx1与idx2在两个关键帧中对应特征点的描述子距离        
+		   	    // Calculate the descriptor distance of the corresponding feature points of idx1 and idx2 in the two key frames        
 			    const int dist = DescriptorDistance(d1,d2);
 			    
-			    if(dist>TH_LOW || dist>bestDist)// 距离过大 直接跳过
+			    if(dist>TH_LOW || dist>bestDist)
 				continue;
 			    
-		  // 步骤3.3：通过特征点索引idx2在pKF2中取出对应的特征点
+		  	    // Step 3.3: Take out the corresponding feature point in pKF2 through the feature point index idx2
 			    const cv::KeyPoint &kp2 = pKF2->mvKeysUn[idx2];
 
 			    if(!bStereo1 && !bStereo2)
