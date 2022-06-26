@@ -1,53 +1,51 @@
-﻿/**
+/**
 * This file is part of ORB-SLAM2.
-* 全局/局部 优化 使用G2O图优化
+* Global/local optimization Using G2O graph optimization
 * 
 * http://www.cnblogs.com/luyb/p/5447497.html
 * 
-* 优化的目标函数在SLAM问题中，常见的几种约束条件为：
-* 1. 三维点到二维特征的映射关系（通过投影矩阵）；
-* 2. 位姿和位姿之间的变换关系（通过三维刚体变换）；
-* 3. 二维特征到二维特征的匹配关系（通过F矩阵）；
-* 5. 其它关系（比如单目中有相似变换关系）。
-* 如果我们能够知道其中的某些关系是准确的，
-* 那么可以在g2o中定义这样的关系及其对应的残差，
-* 通过不断迭代优化位姿来逐步减小残差和，从而达到优化位姿的目标。
+* Optimized objective function In the SLAM problem, several common constraints are:
+* 1. The mapping relationship between 3D points and 2D features (through the projection matrix);
+* 2. The transformation relationship between pose and pose (through three-dimensional rigid body transformation);
+* 3. The matching relationship between two-dimensional features and two-dimensional features (through the F matrix);
+* 4. Other relationships (such as similar transformation relationships in monocular).
+* If we can know that some of these relationships are accurate, we can define such relationships and their corresponding residuals in g2o, 
+* and gradually reduce the residual sum by iteratively optimizing the pose, so as to achieve the goal of optimizing the pose .
 * 
 *
-1 局部优化
-当新的关键帧加入到convisibility graph时，作者在关键帧附近进行一次局部优化，如下图所示。
-Pos3是新加入的关键帧，其初始估计位姿已经得到。此时，Pos2是和Pos3相连的关键帧，
-X2是Pos3看到的三维点，X1是Pos2看到的三维点，这些都属于局部信息，
-共同参与Bundle Adjustment。同时，Pos1也可以看到X1，但它和Pos3没有直接的联系，
-属于Pos3关联的局部信息，
-参与Bundle Adjustment，但Pos1取值保持不变（位姿固定）。
-Pos0和X0不参与Bundle Adjustment。
-
-2全局优化
-在全局优化中，所有的关键帧（除了第一帧 Pos0 （位姿固定））和三维点都参与优化
-
-
-3闭环处的Sim3位姿优化
-当检测到闭环时，闭环连接的两个关键帧的位姿需要通过Sim3优化（以使得其尺度一致）。
-优化求解两帧之间的 相似变换矩阵 S12，使得二维对应点（feature）的投影误差最小。
-如下图所示，Pos6和Pos2为一个可能的闭环。通过(u4,2,v4,2)
-和(u4,6,v4,6)之间的投影误差来优化S6,2。
-
+* 1 Local optimization
+* When a new keyframe is added to the visibility graph, the author performs a local optimization near the keyframe, as shown in the following figure.
+* Pos3 is a newly added keyframe whose initial estimated pose has been obtained. At this point, 
+* Pos2 is the key frame connected to Pos3, X2 is the 3D point seen by Pos3, 
+* and X1 is the 3D point seen by Pos2. 
+* These are all local information and participate in Bundle Adjustment together. 
+* At the same time, Pos1 can also see X1, but it has no direct connection with Pos3. 
+* It belongs to the local information associated with Pos3 and participates in Bundle Adjustment, 
+* but the value of Pos1 remains unchanged (the pose is fixed). Pos0 and X0 do not participate in Bundle Adjustment.
+*
+* 2 Global optimization
+* In the global optimization, all keyframes (except the first frame Pos0 (fixed pose)) and 3D points are involved in the optimization
+*
+*
+* 3 Sim3 pose optimization at closed loop
+* When loop closures are detected, the poses of the two keyframes connected by loop closures need to be optimized by Sim3 (to make their scales consistent).
+* The similarity transformation matrix S12 between the two frames is optimized to minimize the projection error of the two-dimensional corresponding point (feature).
+*
 */
 
 #include "Optimizer.h"
-// 函数优化方法
+// function optimization method
 #include "Thirdparty/g2o/g2o/core/optimization_algorithm_levenberg.h"
-//优化方法 莱文贝格－马夸特方法（Levenberg–Marquardt algorithm）能提供数非线性最小化（局部最小）的数值解。
-// 矩阵 分解 求解器
-#include "Thirdparty/g2o/g2o/core/block_solver.h"//矩阵快分解 求解器的实现。主要来自choldmod, csparse。在使用g2o时要先选择其中一种。
-#include "Thirdparty/g2o/g2o/solvers/linear_solver_eigen.h"// 矩阵 线性优化求解器
-// #include <g2o/solvers/csparse/linear_solver_csparse.h>  // csparse求解器
+//Optimization methods The Levenberg–Marquardt algorithm provides numerical solutions for numerical nonlinear minimization (local minima).
+// matrix decomposition solver
+#include "Thirdparty/g2o/g2o/core/block_solver.h"//An implementation of a fast matrix factorization solver. Mainly from holdmod, csparse. Choose one of these first when using g2o.
+#include "Thirdparty/g2o/g2o/solvers/linear_solver_eigen.h"// Matrix Linear Optimization Solver
+// #include <g2o/solvers/csparse/linear_solver_csparse.h>  // csparse solver
 // #include <g2o/solvers/dense/linear_solver_cholmod.h //
-#include "Thirdparty/g2o/g2o/solvers/linear_solver_dense.h"// 稠密 矩阵 线性求解器
-// 图 边顶点的类型
-#include "Thirdparty/g2o/g2o/types/types_six_dof_expmap.h"// 定义好的顶点类型  6维度 优化变量  例如 相机 位姿
-#include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"// 定义好的顶点类型  7维度 优化变量  例如 相机 位姿 + 深度信息
+#include "Thirdparty/g2o/g2o/solvers/linear_solver_dense.h"// dense matrix linear solver
+// graph edge vertex type
+#include "Thirdparty/g2o/g2o/types/types_six_dof_expmap.h"// Defined vertex types 6-dimensional optimization variables such as camera pose
+#include "Thirdparty/g2o/g2o/types/types_seven_dof_expmap.h"// Defined vertex types 7-dimensional optimization variables such as camera pose + depth information
 #include "Thirdparty/g2o/g2o/core/robust_kernel_impl.h"
 #include<Eigen/StdVector>
 #include "Converter.h"
@@ -56,58 +54,58 @@ Pos0和X0不参与Bundle Adjustment。
 namespace ORB_SLAM2
 {
 
-    // 全局优化  地图  迭代次数
-/**
- * @brief    pMap中所有的MapPoints和关键帧做bundle adjustment  全局优化
- *  这个全局BA优化在本程序中有两个地方使用：
- * a.单目初始化： CreateInitialMapMonocular    函数
- * b.闭环优化    ： RunGlobalBundleAdjustment 函数
- * @param pMap          全局地图
- * @param nIterations 优化迭代次数
- * @param pbStopFlag 设置是否强制暂停，需要终止迭代的时候强制终止 
- * @param nLoopKF     关键帧的个数
- * @param bRobust      是否使用核函数 鲁棒优化 (时间稍长)
- * 
- */  
+    // Global Optimization Map Iterations
+	/**
+	 * @brief    All MapPoints and keyframes in pMap are globally optimized by bundle adjustment
+	 *  This global BA optimization is used in two places in this program:
+	 * a.Monocular initialization： CreateInitialMapMonocular    function
+	 * b.closed loop optimization： RunGlobalBundleAdjustment    function
+	 * @param pMap            global map
+	 * @param nIterations     number of optimization iterations
+	 * @param pbStopFlag      set whether to force pause, force termination when the iteration needs to be terminated 
+	 * @param nLoopKF         number of keyframes
+	 * @param bRobust         whether to use kernel function robust optimization (slightly longer)
+	 * 
+	 */  
     void Optimizer::GlobalBundleAdjustemnt(Map* pMap, int nIterations, bool* pbStopFlag, const unsigned long nLoopKF, const bool bRobust)
     {
-	vector<KeyFrame*> vpKFs = pMap->GetAllKeyFrames();// 地图的关键帧
-	vector<MapPoint*> vpMP = pMap->GetAllMapPoints();// 地图的 地图点
+	vector<KeyFrame*> vpKFs = pMap->GetAllKeyFrames();// keyframes of the map
+	vector<MapPoint*> vpMP = pMap->GetAllMapPoints();// map point
 	BundleAdjustment(vpKFs,vpMP,nIterations,pbStopFlag, nLoopKF, bRobust);
     }
 
-    // BA 最小化重投影误差     关键帧   地图点   优化迭代次数
-    // 优化关键帧的位姿态 和  地图点坐标值
-/**
- * @brief bundle adjustment Optimization
- * 3D-2D 最小化重投影误差 e = (u,v) - K * project(Tcw*Pw) \n
- * 
- * 1. Vertex: g2o::VertexSE3Expmap()，即当前帧的Tcw  位姿
- *                  g2o::VertexSBAPointXYZ()，MapPoint 的 mWorldPos  地图点坐标
- * 2. Edge:
- *     - g2o::EdgeSE3ProjectXYZ()，BaseBinaryEdge 二元边
- *         + Vertex 连接的顶点1：待优化当前帧的 位姿 Tcw
- *         + Vertex 连接的顶点2：待优化MapPoint的mWorldPos 地图点坐标
- *         + measurement 测量值(真实值)：MapPoint 地图点在当前帧中的二维位置(u,v)像素坐标
- *         + InfoMatrix信息矩阵(误差权重矩阵): invSigma2(与特征点所在的尺度有关)
- *         
- * @param   vpKFs          关键帧 
- * @param   vpMP           地图点 MapPoints
- * @param   nIterations 迭代次数（20次）
- * @param   pbStopFlag 是否强制暂停
- * @param   nLoopKF     关键帧的个数
- * @param   bRobust     是否使用核函数
- */   
+    // BA Minimize Reprojection Error Keyframes Map Points Optimization Iterations
+    // Optimize the pose and map point coordinates of keyframes
+	/**
+	 * @brief bundle adjustment Optimization
+	 * 3D-2D Minimize Reprojection Error e = (u,v) - K * project(Tcw*Pw) \n
+	 * 
+	 * 1. Vertex: g2o::VertexSE3Expmap()，Tcw pose of the current frame
+	 *            g2o::VertexSBAPointXYZ()，MapPoint is mWorldPos map point coordinates
+	 * 2. Edge:
+	 *     - g2o::EdgeSE3ProjectXYZ()，BaseBinaryEdge binary edge
+	 *         + Vertex Connected Vertex 1: Pose Tcw of the current frame to be optimized
+	 *         + Vertex Connected vertex 2: mWorldPos map point coordinates of the MapPoint to be optimized
+	 *         + measurement Measured value (true value)：The two-dimensional position (u, v) pixel coordinates of the MapPoint map point in the current frame
+	 *         + InfoMatrix Information matrix (error weight matrix): invSigma2(It is related to the scale at which the feature points are located)
+	 *         
+	 * @param   vpKFs          Keyframe
+	 * @param   vpMP           MapPoints
+	 * @param   nIterations    Number of iterations (20 times)
+	 * @param   pbStopFlag     Whether to force a suspension
+	 * @param   nLoopKF        Number of keyframes
+	 * @param   bRobust        Whether to use a kernel function
+	 */   
     void Optimizer::BundleAdjustment(const vector<KeyFrame *> &vpKFs, const vector<MapPoint *> &vpMP,
 				    int nIterations, bool* pbStopFlag, const unsigned long nLoopKF, const bool bRobust)
     {
 	vector<bool> vbNotIncludedMP;
-	vbNotIncludedMP.resize(vpMP.size());//地图点数量
-// 步骤1：初始化g2o优化器	
-     //步骤1.1：设置求解器类型  帧位姿 pose 维度为 6 (优化变量维度), 地图点  landmark 维度为 3
-	g2o::BlockSolver_6_3::LinearSolverType * linearSolver;// pose 维度为 6 (优化变量维度),  landmark 维度为 3
-        // typedef g2o::BlockSolver< g2o::BlockSolverTraits<6,3> > Block;  // pose 维度为 6 (优化变量维度),  landmark 维度为 3
-	linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();// 矩阵求解器 指针
+	vbNotIncludedMP.resize(vpMP.size());//Number of map points
+	// Step 1: Initialize the g2o optimizer	
+        // Step 1.1: Set the solver type frame pose pose dimension to 6 (optimization variable dimension), map point landmark dimension to 3
+	g2o::BlockSolver_6_3::LinearSolverType * linearSolver;// pose dimension is 6 (optimization variable dimension), landmark dimension is 3
+        // typedef g2o::BlockSolver< g2o::BlockSolverTraits<6,3> > Block;  // The pose dimension is 6 (optimization variable dimension), and the landmark dimension is 3
+	linearSolver = new g2o::LinearSolverEigen<g2o::BlockSolver_6_3::PoseMatrixType>();// matrix solver pointer
 	// linearSolver = new g2o::LinearSolverCSparse<g2o::BlockSolver_6_3::PoseMatrixType>();
       //步骤1.2： 设置求解器
 	g2o::BlockSolver_6_3 * solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
