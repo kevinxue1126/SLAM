@@ -1137,33 +1137,33 @@ namespace ORB_SLAM2
 				pMPinKF->Replace(pMP);// Replace the frame map point with the original map point
 			}
 		    }
-// 步骤11：  如果MapPoint能匹配关键帧的特征点，并且该特征点没有对应的MapPoint，那么为该特征点点添加地图点MapPoint           
-		  //    关键帧  特征点 还没有匹配的地图点  把匹配到的地图点 对应上去
+		    // Step 11: If the MapPoint can match the feature point of the key frame, and the feature point does not have a corresponding MapPoint, then add a map point MapPoint for the feature point         
+		   //    Keyframe Feature points Map points that have not yet been matched Match the matched map points
 		    else
 		    {
-			pMP->AddObservation(pKF,bestIdx);// pMP 地图点 观测到了 帧pKF 上第 bestIdx 个 特征点
-			pKF->AddMapPoint(pMP,bestIdx);// 帧 的 第 bestIdx 个 特征点 对应pMP地图点
+			pMP->AddObservation(pKF,bestIdx);// The pMP map point observes the bestIdx-th feature point on frame pKF
+			pKF->AddMapPoint(pMP,bestIdx);// The bestIdx feature point of the frame corresponds to the pMP map point
 		    }
-		    nFused++;// 融合次数++ 
+		    nFused++;// Fusion times++
 		}
 	    }
 	    return nFused;
 	}
 
 
-  /**
-  * @brief 将MapPoints投影到 关键帧pKF 中，并判断是否有重复的MapPoints
-  * Scw为世界坐标系到pKF机体坐标系的Sim3 相似变换变换 ，
-  * 需要先将相似变换转换到欧式变换SE3 下  将世界坐标系下的vpPoints变换到机体坐标系
-  * 1 地图点匹配到 帧 关键点 关键点有对应的地图点时， 用帧关键点对应的地图点 替换 原地图点
-  * 2 地图点匹配到 帧 关键点 关键点无对应的地图点时，为该特征点 添加匹配到的地图点MapPoint
-  * @param  pKF          相邻关键帧
-  * @param  Scw          世界坐标系到pKF机体坐标系的Sim3 相似变换变换  [s*R t]
-  * @param  vpPoints 需要融合的 地图点 MapPoints
-  * @param  th             搜索半径的因子
-  *@param    vpReplacePoint
-  * @return                   重复MapPoints的数量
-  */
+	  /**
+	  * @brief Project MapPoints into keyframe pKF and determine if there are duplicate MapPoints
+	  * Scw is the Sim3 similarity transformation transformation from the world coordinate system to the pKF body coordinate system. 
+	  * It is necessary to convert the similarity transformation to the Euclidean transformation SE3 to transform the vpPoints in the world coordinate system to the body coordinate system.
+	  * 1 The map point is matched to the frame key point. When the key point has a corresponding map point, replace the original map point with the map point corresponding to the frame key point.
+	  * 2 The map point is matched to the frame key point. When the key point has no corresponding map point, add the matched map point MapPoint for the feature point
+	  * @param  pKF               adjacent keyframes
+	  * @param  Scw               sim3 similarity transformation transformation from world coordinate system to pKF body coordinate system [s*R t]
+	  * @param  vpPoints          map Points that need to be fused
+	  * @param  th                factor for search radius
+	  *@param    vpReplacePoint
+	  * @return                   number of repeating MapPoints
+	  */
 	int ORBmatcher::Fuse(KeyFrame *pKF, cv::Mat Scw, const vector<MapPoint *> &vpPoints, float th, vector<MapPoint *> &vpReplacePoint)
 	{
 	    // Get Calibration Parameters for later projection
@@ -1659,7 +1659,7 @@ namespace ORB_SLAM2
 		    }
 		}
 	    }
-	// Step 6: Eliminate the incorrectly matched points according to the direction difference consistency constraint
+	     // Step 6: Eliminate the incorrectly matched points according to the direction difference consistency constraint
 	    //Apply rotation consistency
 	    if(mbCheckOrientation)
 	    {
