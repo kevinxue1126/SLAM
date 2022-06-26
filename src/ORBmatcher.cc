@@ -1105,37 +1105,36 @@ namespace ORB_SLAM2
 			const float ex = u-kpx;
 			const float ey = v-kpy;
 			const float e2 = ex*ex+ey*ey;
-			    // 基于卡方检验计算出的阈值（假设测量有一个像素的偏差）
+			// Threshold calculated based on chi-square test (assuming measurement has a one-pixel deviation)
 			if(e2*pKF->mvInvLevelSigma2[kpLevel]>5.99)
 			    continue;
 		    }
-	// 步骤9：计算地图点和 关键帧 特征点 描述子之间的距离 选出最近距离的 关键点
-		    const cv::Mat &dKF = pKF->mDescriptors.row(idx);// 关键帧 特征点 描述子
-		    const int dist = DescriptorDistance(dMP,dKF);// 地图点和 关键帧 特征点 描述子之间的距离
+		    // Step 9: Calculate the distance between map points and key frame feature points, and select the key point with the closest distance between the descriptors
+		    const cv::Mat &dKF = pKF->mDescriptors.row(idx);// keyframe feature point descriptor
+		    const int dist = DescriptorDistance(dMP,dKF);// The distance between map points and keyframe feature points, descriptors
 		    if(dist<bestDist)
 		    {
-			bestDist = dist;// 最短的距离
-			bestIdx = idx;// 对应的 特征点 下标
+			bestDist = dist;// shortest distance
+			bestIdx = idx;// Corresponding feature point subscript
 		    }
 		}
 
-		// If there is already a MapPoint replace otherwise add new measurement
-		// 找到了地图点MapPoint在该区域最佳匹配的特征点        
-		if(bestDist<=TH_LOW)// 距离<50
+		// If there is already a MapPoint replace otherwise add new measurement      
+		if(bestDist<=TH_LOW)// Distance < 50
 		{
-		  // 该帧 上 特征点 对应的 地图点 初始化值为 null指针
+		   // The map point corresponding to the feature point on this frame, the initialization value is a null pointer
 		    MapPoint* pMPinKF = pKF->GetMapPoint(bestIdx);
-// 步骤10： 如果MapPoint能匹配关键帧的特征点，并且该特征点有对应的MapPoint，那么将两个MapPoint合并（选择观测数多的）   
-		  // 本身已经 匹配到 地图点
+		    // Step 10: If the MapPoint can match the feature point of the key frame, and the feature point has a corresponding MapPoint, then merge the two MapPoints (select the one with more observations)  
+		    // itself has been matched to the map point
 		    if(pMPinKF)
 		    {
-			if(!pMPinKF->isBad())//是好点
+			if(!pMPinKF->isBad())// good point
 			{
-		// 地图点 和 关键帧  特征点对应的地图点 匹配了 保留被观测到次数多的 地图点
-			    if(pMPinKF->Observations() > pMP->Observations())//帧地图点观测次数多 保留帧地图点
-				pMP->Replace(pMPinKF);//原地图点 用帧地图点替代
+			    // Map points and key frames, map points corresponding to feature points, match the map points that have been observed more frequently
+			    if(pMPinKF->Observations() > pMP->Observations())//Frame map points are observed more frequently, and frame map points are retained
+				pMP->Replace(pMPinKF);//The original map point is replaced by the frame map point
 			    else
-				pMPinKF->Replace(pMP);// 帧地图点替代用 原地图点替代
+				pMPinKF->Replace(pMP);// Replace the frame map point with the original map point
 			}
 		    }
 // 步骤11：  如果MapPoint能匹配关键帧的特征点，并且该特征点没有对应的MapPoint，那么为该特征点点添加地图点MapPoint           
