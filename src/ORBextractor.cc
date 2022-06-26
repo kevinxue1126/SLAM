@@ -50,28 +50,29 @@ namespace ORB_SLAM2
 
       const int PATCH_SIZE = 31;
       const int HALF_PATCH_SIZE = 15;
-      const int EDGE_THRESHOLD = 19;// 外边框的 尺寸 像素大小
+      const int EDGE_THRESHOLD = 19;// The size of the outer border, in pixels
 
-// 灰度质心法计算特征点方向
-// 灰度质心法假设角点的灰度与质心之间存在一个偏移，这个向量可以用于表示一个方向，
-// 具体也就是计算这个区域的所有像素和对应x的坐标的乘积与所有像素与对应y的坐标的乘积的比值,计算反正切。
+      // Gray centroid method to calculate the direction of feature points
+      // The grayscale centroid method assumes that there is an offset between the grayscale of the corner and the centroid. 
+      // This vector can be used to represent a direction, that is to calculate the product of all pixels in this area and the coordinates corresponding to x and all pixels and the corresponding y 
+      // The ratio of the products of the coordinates to calculate the arctangent.
       static float IC_Angle(const Mat& image, Point2f pt,  const vector<int> & u_max)
       {
 	  int m_01 = 0, m_10 = 0;
-	  // 得到中心位置
+	  // get the center position
 	  const uchar* center = &image.at<uchar> (cvRound(pt.y), cvRound(pt.x));
 
 	  // Treat the center line differently, v=0
-	  //   对 v=0 这一行单独计算
+	  //   Calculated separately for the line v=0
 	  for (int u = -HALF_PATCH_SIZE; u <= HALF_PATCH_SIZE; ++u)
 	      m_10 += u * center[u];
 
 	  // Go line by line in the circuI853lar patch
-	  int step = (int)image.step1();// 这边要注意图像的step不一定是图像的宽度
+	  int step = (int)image.step1();// It should be noted here that the step of the image is not necessarily the width of the image
 	  for (int v = 1; v <= HALF_PATCH_SIZE; ++v)
 	  {
 	      // Proceed over the two lines
-	    // 上下和左右两条线同时计算
+	      // Simultaneous calculation of both up and down and left and right lines
 	      int v_sum = 0;
 	      int d = u_max[v];
 	      for (int u = -d; u <= d; ++u)
