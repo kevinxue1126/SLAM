@@ -86,7 +86,7 @@
 #include "Tracking.h"
 
 #include<opencv2/core/core.hpp>
-#include<opencv2/features2d/features2d.hpp>// orb 特征检测 提取
+#include<opencv2/features2d/features2d.hpp>// orb feature detection extraction
 
 // user
 #include"ORBmatcher.h"
@@ -96,28 +96,28 @@
 #include"Initializer.h"
 
 #include"Optimizer.h"
-#include"PnPsolver.h"// 3d-2d点对 求解 R  t
+#include"PnPsolver.h"// 3d-2d point pair Solving for R t
 
 #include<iostream>
-#include<mutex>//多线程
+#include<mutex>//Multithreading
 
 
 using namespace std;
 
-// 程序中变量名的第一个字母如果为"m"则表示为类中的成员变量，member
-// 第一个、第二个字母:
-// "p"表示指针数据类型
-// "n"表示int类型
-// "b"表示bool类型
-// "s"表示set类型
-// "v"表示vector数据类型
-// 'l'表示list数据类型
-// "KF"表示KeyPoint数据类型
+// If the first letter of the variable name in the program is "m", it means a member variable in the class，member
+// First and second letters:
+// "p" indicates the pointer data type
+// "n" means int type
+// "b" means bool type
+// "s" means set type
+// "v" indicates the vector data type
+// "l" means list data type
+// "KF" for KeyPoint data type
 
 namespace ORB_SLAM2
 {
     /**
-      * @brief  Tracking对象初始化函数  默认构造函数
+      * @brief  Tracking object initialization function  default constructor
       *
       */
 	// Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Map *pMap,
@@ -135,9 +135,9 @@ namespace ORB_SLAM2
 	{
 	    // Load camera parameters from settings file
 
-	    cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);//读取配置文件
+	    cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);//read configuration file
 	    
-//【1】------------------ 相机内参数矩阵 K------------------------
+	     //【1】------------------ In-camera parameter matrix K------------------------
 	    //     |fx  0   cx|
 	    // K = |0   fy  cy|
 	    //     |0   0   1 |
@@ -145,15 +145,15 @@ namespace ORB_SLAM2
 	    float fy = fSettings["Camera.fy"];
 	    float cx = fSettings["Camera.cx"];
 	    float cy = fSettings["Camera.cy"];
-	    cv::Mat K = cv::Mat::eye(3,3,CV_32F);// 初始化为 对角矩阵
+	    cv::Mat K = cv::Mat::eye(3,3,CV_32F);// initialized to a diagonal matrix
 	    K.at<float>(0,0) = fx;
 	    K.at<float>(1,1) = fy;
 	    K.at<float>(0,2) = cx;
 	    K.at<float>(1,2) = cy;
-	    K.copyTo(mK);// 拷贝到 类内变量 mK 为类内 可访问变量
+	    K.copyTo(mK);// Copy to In-class variable mK is an accessible variable in the class
 	    
- // 【2】-------畸变校正 参数----------------------------------------
-	    cv::Mat DistCoef(4,1,CV_32F);// 相机畸变矫正 矩阵
+ 	    // 【2】-------Distortion Correction Parameters----------------------------------------
+	    cv::Mat DistCoef(4,1,CV_32F);// Camera Distortion Correction Matrix
 	    DistCoef.at<float>(0) = fSettings["Camera.k1"];
 	    DistCoef.at<float>(1) = fSettings["Camera.k2"];
 	    DistCoef.at<float>(2) = fSettings["Camera.p1"];
@@ -164,20 +164,20 @@ namespace ORB_SLAM2
 		DistCoef.resize(5);
 		DistCoef.at<float>(4) = k3;
 	    }
-	    DistCoef.copyTo(mDistCoef);// 拷贝到 类内变量
+	    DistCoef.copyTo(mDistCoef);// copy to class variable
 
-	    mbf = fSettings["Camera.bf"];// 基线 * fx 
-            //----------------拍摄 帧率---------------------------
+	    mbf = fSettings["Camera.bf"];// baseline * fx 
+            //----------------Shooting frame rate---------------------------
 	    float fps = fSettings["Camera.fps"];
 	    if(fps==0)
 		fps=30;
 
 	    // Max/Min Frames to insert keyframes and to check relocalisation
-	    // 关键帧 间隔
+	    // key frame interval
 	    mMinFrames = 0;
 	    mMaxFrames = fps;
-// 【3】------------------显示参数--------------------------
-	    cout << endl << "相机参数  Camera Parameters: " << endl;
+	    // 【3】------------------Display parameters--------------------------
+	    cout << endl << "Camera Parameters: " << endl;
 	    cout << "-- fx: " << fx << endl;
 	    cout << "-- fy: " << fy << endl;
 	    cout << "-- cx: " << cx << endl;
@@ -189,56 +189,56 @@ namespace ORB_SLAM2
 	    cout << "-- p1: " << DistCoef.at<float>(2) << endl;
 	    cout << "-- p2: " << DistCoef.at<float>(3) << endl;
 	    cout << "-- fps: " << fps << endl;
-	    int nRGB = fSettings["Camera.RGB"];// 图像通道顺序  1 RGB顺序     0  BGR 顺序
+	    int nRGB = fSettings["Camera.RGB"];// Image channel order 1 RGB order 0 BGR order
 	    mbRGB = nRGB;
 	    if(mbRGB)
-		cout << "-- 彩色图通道顺序color order: RGB (ignored if grayscale)" << endl;
+		cout << "-- color order: RGB (ignored if grayscale)" << endl;
 	    else
-		cout << "-- 彩色图通道顺序 color order: BGR (ignored if grayscale)" << endl;
+		cout << "-- color order: BGR (ignored if grayscale)" << endl;
 
-//【4】-----------载入 ORB特征提取参数  Load ORB parameters------------------------------------
-	    // 每一帧提取的特征点数 1000
-	    int nFeatures = fSettings["ORBextractor.nFeatures"];          //每张图像提取的特征点总数量 2000
-	    // 图像建立金字塔时的变化尺度 1.2
-	    float fScaleFactor = fSettings["ORBextractor.scaleFactor"]; //尺度因子1.2  图像金字塔 尺度因子 
-	    // 尺度金字塔的层数 8
-	    int nLevels = fSettings["ORBextractor.nLevels"];// 金字塔总层数 8
-	    // 提取fast特征点的默认阈值 20
-	    int fIniThFAST = fSettings["ORBextractor.iniThFAST"];// 快速角点提取 算法参数  阈值
-	     // 如果默认阈值提取不出足够fast特征点，则使用最小阈值 8
-	    int fMinThFAST = fSettings["ORBextractor.minThFAST"];//                                  最低阈值
+	     //【4】-----------Load ORB parameters------------------------------------
+	    // The number of feature points extracted per frame is 1000
+	    int nFeatures = fSettings["ORBextractor.nFeatures"];          //The total number of feature points extracted from each image is 2000
+	    // Scale of image changes when building pyramids 1.2
+	    float fScaleFactor = fSettings["ORBextractor.scaleFactor"]; // Scale factor 1.2 Image pyramid Scale factor
+	    // Levels of the scale pyramid 8
+	    int nLevels = fSettings["ORBextractor.nLevels"];
+	    // The default threshold for extracting fast feature points is 20
+	    int fIniThFAST = fSettings["ORBextractor.iniThFAST"];
+	     // If the default threshold does not extract enough fast feature points, use the minimum threshold of 8
+	    int fMinThFAST = fSettings["ORBextractor.minThFAST"];
            
-// 【5】-------------------创建 ORB特征提取 对象---------------------------------------------------------
-           // tracking过程都会用到mpORBextractorLeft作为特征点提取器
+	    // 【5】-------------------Create ORB Feature Extraction Object---------------------------------------------------------
+           // The tracking process will use mpORBextractorLeft as the feature point extractor
 	    mpORBextractorLeft = new ORBextractor(nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
-	    // 如果是双目，tracking过程中还会用用到mpORBextractorRight作为右目特征点提取器
-	    if(sensor==System::STEREO)//双目相机 
+	    // If it is binocular, mpORBextractorRight will also be used as the right-eye feature point extractor during the tracking process.
+	    if(sensor==System::STEREO)//binocular camera
 		mpORBextractorRight = new ORBextractor(nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
-	    // 在单目初始化的时候，会用mpIniORBextractor来作为特征点提取器 提取的特征点数量设定为普通帧的2倍。
-	    if(sensor==System::MONOCULAR)// 单目相机 第一帧 特征提取器
-                //为了让单目成功初始化（单目的初始化需要通过平移运动归一化尺度因子）
-	       // 初始化时mpIniORBextractor提取的特征点数量设定为普通帧的2倍。
+	    // When the monocular is initialized, mpIniORBextractor is used as the feature point extractor, and the number of extracted feature points is set to be twice that of the normal frame.
+	    if(sensor==System::MONOCULAR)// Monocular Camera First Frame Feature Extractor
+                // In order for the monocular to be successfully initialized (monocular initialization requires a scale factor normalized by translational motion)
+	       // During initialization, the number of feature points extracted by mpIniORBextractor is set to be twice that of a normal frame.
 		mpIniORBextractor = new ORBextractor(2*nFeatures,fScaleFactor,nLevels,fIniThFAST,fMinThFAST);
-// 【6】--------------显示特征提取参数信息------------------------------------
-	    cout << endl  << "ORB特征提取参数 ORB Extractor Parameters: " << endl;
-	    cout << "-- 每幅图像特征点数量 Number of Features:   " << nFeatures << endl;
-	    cout << "-- 金字塔层数Scale Levels:                                 " << nLevels << endl;
-	    cout << "-- 金字塔尺度Scale Factor:                                 " << fScaleFactor << endl;
-	    cout << "-- 初始快速角点法阈值 Initial Fast Threshold: " << fIniThFAST << endl;
-	    cout << "-- 最小阈值 Minimum Fast Threshold:             " << fMinThFAST << endl;
+	     // 【6】--------------Display feature extraction parameter information------------------------------------
+	    cout << endl  << "ORB Extractor Parameters: " << endl;
+	    cout << "-- Number of Features:   " << nFeatures << endl;
+	    cout << "-- Scale Levels:                                 " << nLevels << endl;
+	    cout << "-- Scale Factor:                                 " << fScaleFactor << endl;
+	    cout << "-- Initial Fast Threshold: " << fIniThFAST << endl;
+	    cout << "-- Minimum Fast Threshold:             " << fMinThFAST << endl;
 
- //【7】 双目 或者 深度 相机深度阈值
+ 	    //【7】 binocular or depth camera depth threshold
 	    if(sensor==System::STEREO || sensor==System::RGBD)
 	    {
-	       // 判断一个3D点远/近的阈值 mbf * 35 / fx
-		mThDepth = mbf*(float)fSettings["ThDepth"]/fx;//深度 阈值
-		cout << endl << "深度图阈值 Depth Threshold (Close/Far Points): " << mThDepth << endl;
+	       // Threshold for judging how far/near a 3D point is mbf * 35 / fx
+		mThDepth = mbf*(float)fSettings["ThDepth"]/fx;//depth threshold
+		cout << endl << "Depth Threshold (Close/Far Points): " << mThDepth << endl;
 	    }	    
-	    // 深度相机
+	    // depth camera
 	    if(sensor==System::RGBD)
 	    {
-	        // 深度相机disparity 视差 转化为 深度 depth时的因子
-		mDepthMapFactor = fSettings["DepthMapFactor"];//地图深度 因子
+	        // Depth camera disparity disparity is converted to depth, the factor when depth
+		mDepthMapFactor = fSettings["DepthMapFactor"];//map depth factor
 		if(fabs(mDepthMapFactor)<1e-5)
 		    mDepthMapFactor=1;
 		else
@@ -246,51 +246,51 @@ namespace ORB_SLAM2
 	    }
 
 	}
-       // 设置局部建图
+       // Set up local mapping
 	void Tracking::SetLocalMapper(LocalMapping *pLocalMapper)
 	{
-	    mpLocalMapper=pLocalMapper;// 设置 类对象 值
+	    mpLocalMapper=pLocalMapper;// set class object value
 	}
-       // 设置回环检测
+       // Set up loopback detection
 	void Tracking::SetLoopClosing(LoopClosing *pLoopClosing)
 	{
-	    mpLoopClosing=pLoopClosing;// 设置 类对象 值
+	    mpLoopClosing=pLoopClosing;// set class object value
 	}
-      // 设置 可视化
+      // Set up visualization
 	void Tracking::SetViewer(Viewer *pViewer)
 	{
-	    mpViewer=pViewer;// 设置 类对象 值
+	    mpViewer=pViewer;// set class object value
 	}
 	
 	
-/**
-  * @brief  双目相机 初始化 获取相机位姿
-  * 输入左右目图像，可以为RGB、BGR、RGBA、GRAY
-  * 1、将图像转为mImGray和imGrayRight并初始化mCurrentFrame
-  * 2、进行tracking过程
-  * 输出世界坐标系到该帧相机坐标系的变换矩阵
-  */
+	/**
+	  * @brief  Binocular camera initialization Get camera pose
+	  * Input left and right eye images, which can be RGB, BGR, RGBA, GRAY
+	  * 1. Convert the image to mImGray and imGrayRight and initialize mCurrentFrame
+	  * 2. Carry out the tracking process
+	  * Output the transformation matrix from the world coordinate system to the camera coordinate system of the frame
+	  */
 	cv::Mat Tracking::GrabImageStereo(const cv::Mat &imRectLeft, const cv::Mat &imRectRight, const double &timestamp)
 	{
-//-----【1】无论图片是RGB，BGR， 还是RGBA，BGRA，均转化为灰度图，放弃彩色信息。----------------------------------	 
+	    //-----[1] Whether the picture is RGB, BGR, or RGBA, BGRA, it is converted into a grayscale image, giving up color information.----------------------------------	 
 	    mImGray = imRectLeft;
 	    cv::Mat imGrayRight = imRectRight;   
-          // 彩色图转换到灰色图
- // 步骤1：将RGB或RGBA图像转为灰度图像
+            // Convert color map to gray map
+ 	    // Step 1: Convert RGB or RGBA image to grayscale
 	    if(mImGray.channels()==3)
 	    {
-		if(mbRGB)//  原图 通道RGB顺序
+		if(mbRGB)//  Original image Channel RGB order
 		{
 		    cvtColor(mImGray,mImGray,CV_RGB2GRAY);
 		    cvtColor(imGrayRight,imGrayRight,CV_RGB2GRAY);
 		}
-		else//  原图 通道BGR顺序
+		else//  Original image Channel BGR sequence
 		{
 		    cvtColor(mImGray,mImGray,CV_BGR2GRAY);
 		    cvtColor(imGrayRight,imGrayRight,CV_BGR2GRAY);
 		}
 	    }
-      // 彩色图带有 透明度 四通道 转换到 灰度图
+      	    // Color image with four channels of transparency converted to grayscale
 	    else if(mImGray.channels()==4)
 	    {
 		if(mbRGB)
@@ -304,42 +304,42 @@ namespace ORB_SLAM2
 		    cvtColor(imGrayRight,imGrayRight,CV_BGRA2GRAY);
 		}
 	    }
-// 步骤2：构造Frame	    
-       //---创建 帧  灰度图左图  灰度图右图   时间戳   左右图像的 ORB特征提取器 ORB字典 相机内参数mk 畸变校正参数mDistCoef  远近点阈值  深度尺度
-       // 帧对象 关键点 关键点匹配对应深度值 匹配点坐标值 对关键点分块
+	    // Step 2: Construct the Frame	    
+            //---Create frame, grayscale left image, grayscale right image, timestamp, ORB feature extractor for left and right images, ORB dictionary, in-camera parameter mk, distortion correction parameter mDistCoef, near and far threshold and depth scale
+            // Frame object key points, key points are matched to corresponding depth values, and the coordinate values of matching points are divided into key points
 	    mCurrentFrame = Frame(mImGray,imGrayRight,timestamp,mpORBextractorLeft,mpORBextractorRight,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
 
-// 步骤3：跟踪
-	    // 跟踪后 就能够得到 位姿 
-	    // 初始化-------------------------------
-	    // 当前帧 特征点个数 大于500 进行初始化
-	    // 设置第一帧为关键帧  位姿为 [I 0] 
-	    // 根据第一帧视差求得的深度 计算3D点
-	    // 生成地图 添加地图点 地图点观测帧 地图点最好的描述子 更新地图点的方向和距离 
-	    //                 关键帧的地图点 当前帧添加地图点  地图添加地图点
-	    // 显示地图
-	     // 后面的帧 -------------------
+	    // Step 3: Track
+	    // Pose can be obtained after tracking 
+	    // initialization-------------------------------
+	    // The number of feature points in the current frame is greater than 500, and initialization is performed
+	    // Set the first frame as a key frame and the pose as [I 0] 
+	    // Calculate the 3D point based on the depth obtained from the parallax of the first frame
+	    // Generate map, add map point, map point observation frame, best descriptor of map point, update direction and distance of map point
+	    // map points for keyframes, add map points to the current frame, add map points to the map
+	    // show map
+	    // later frame -------------------
 	    Track(); 
 
 	    return mCurrentFrame.mTcw.clone();
 	}
 	
-/**
-  * @brief   深度相机  获取相机位姿
-  * 输入左目RGB 或 RGBA图像 和 深度图
-  * 1、将图像转为mImGray 和 imDepth 并初始化 mCurrentFrame
-  * 2、进行tracking过程
-  * 输出世界坐标系到该帧相机坐标系的变换矩阵
-  */
+	/**
+	  * @brief   depth camera  get camera pose
+	  * Input left eye RGB or RGBA image and depth map
+	  * 1. Convert the image to mImGray and imDepth, and initialize mCurrentFrame
+	  * 2. Carry out the tracking process
+	  * Output the transformation matrix from the world coordinate system to the camera coordinate system of the frame
+	  */
 	cv::Mat Tracking::GrabImageRGBD(const cv::Mat &imRGB,const cv::Mat &imD, const double &timestamp)
 	{
 	  
-// --------------【1】无论图片是RGB，BGR， 还是RGBA，BGRA，均转化为灰度图，放弃彩色信息---------------
-	    mImGray = imRGB; // 灰度图
-            mImRGB  = imRGB; // 原彩色图
-	    // cv::Mat imDepth = imD;// 深度图 局部变量
-            mImDepth = imD; // 初始化为类 成员变量
-     // 彩色图转换到灰色图
+	    // --------------[1] Whether the picture is RGB, BGR, or RGBA, BGRA, it is converted into a grayscale image, giving up color information---------------
+	    mImGray = imRGB; // Grayscale
+            mImRGB  = imRGB; // original color map
+	    // cv::Mat imDepth = imD;// depth map local variables
+            mImDepth = imD; // Initialized as a class member variable
+     	    // Convert color map to gray map
 	    if(mImGray.channels()==3)
 	    {
 		if(mbRGB)
@@ -350,7 +350,7 @@ namespace ORB_SLAM2
                      cvtColor(mImRGB,mImRGB,CV_BGR2RGB);
                    }
 	    }
-     // 彩色图带有 透明度 四通道 转换到 灰度图
+            // Color image with transparency, four channels converted to grayscale
 	    else if(mImGray.channels()==4)
 	    {
 		if(mbRGB)
@@ -364,31 +364,31 @@ namespace ORB_SLAM2
                        cvtColor(mImRGB,mImRGB,CV_BGRA2RGB);
                     }
 	    }
-// -------------【2】深度信息---------------------------------
-            // 深度相机深度图 精度转换
+	    // -------------【2】depth information---------------------------------
+            // depth camera depth map, precision conversion
 	    if((fabs(mDepthMapFactor-1.0f)>1e-5) || mImDepth.type()!=CV_32F)
-		mImDepth.convertTo(mImDepth,CV_32F,mDepthMapFactor);// 32位float精度 按 除以1000来计算
+		mImDepth.convertTo(mImDepth,CV_32F,mDepthMapFactor);// 32-bit float precision is calculated by dividing by 1000
 	    
-//--------------【3】帧对象 关键点 关键点匹配对应深度值 匹配点坐标值 对关键点分块-----------------------
+	    //--------------[3] The key points of the frame object, the key points match the corresponding depth values, and the matching point coordinate values are divided into key points-----------------------
 	    mCurrentFrame = Frame(mImGray,mImDepth,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
-// -------------【4】跟踪-------------------
-	    Track();// 跟踪后 就能够得到 位姿 
-// -------------【5】返回相机运动
+	    // -------------【4】track-------------------
+	    Track();// Pose can be obtained after tracking
+	    // -------------【5】Back to camera motion
 	    return mCurrentFrame.mTcw.clone();
 	}
 	
-/**
-  * @brief 单目相机  获取相机位姿
-  * 输入左目RGB或RGBA图像
-  * 1、将图像转为mImGray并初始化mCurrentFrame
-  * 2、进行tracking过程
-  * 输出世界坐标系到该帧相机坐标系的变换矩阵
-  */
+	/**
+	  * @brief Monocular camera  Get camera pose
+	  * Input left eye RGB or RGBA image
+	  * 1. Convert the image to mImGray and initialize mCurrentFrame
+	  * 2. Carry out the tracking process
+	  * Output the transformation matrix from the world coordinate system to the camera coordinate system of the frame
+	  */
 	cv::Mat Tracking::GrabImageMonocular(const cv::Mat &im, const double &timestamp)
 	{
-	    mImGray = im;// 图像
-//--------------【1】无论图片是RGB，BGR， 还是RGBA，BGRA，均转化为灰度图，放弃彩色信息。--------------------	    
-         // 彩色图转换到灰色图
+	    mImGray = im;// image
+	   //--------------【1】Whether the picture is RGB, BGR, or RGBA, BGRA, it is converted into a grayscale image, giving up color information.--------------------	    
+            // Convert color map to gray map
 	    if(mImGray.channels()==3)
 	    {
 		if(mbRGB)
@@ -396,7 +396,7 @@ namespace ORB_SLAM2
 		else
 		    cvtColor(mImGray,mImGray,CV_BGR2GRAY);
 	    }
-	 // 彩色图带有 透明度 四通道 转换到 灰度图
+	    // Color image with transparency, four-channel conversion to grayscale
 	    else if(mImGray.channels()==4)
 	    {
 		if(mbRGB)
@@ -404,142 +404,141 @@ namespace ORB_SLAM2
 		else
 		    cvtColor(mImGray,mImGray,CV_BGRA2GRAY);
 	    }
-// --------------------【2】然后将当前读入帧封装为Frame类型的mCurrentFrame对象----------------------------
+	    // --------------------【2】Then encapsulate the current read frame as an mCurrentFrame object of type Frame----------------------------
 	    if(mState==NOT_INITIALIZED || mState==NO_IMAGES_YET)
-	      // 单目 第一帧 提取器 mpIniORBextractor
+	      // monocular, first frame, extractormpIniORBextractor
 		mCurrentFrame = Frame(mImGray,timestamp,mpIniORBextractor,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
 	    else
-	      // 后帧 提取器 mpORBextractorLeft
+	      // post frame extractor mpORBextractorLeft
 		mCurrentFrame = Frame(mImGray,timestamp,mpORBextractorLeft,mpORBVocabulary,mK,mDistCoef,mbf,mThDepth);
-//  【3】 跟踪
-	   // 运动跟踪(跟踪上一帧 地图点)/参考帧跟踪(跟踪上一参考关键帧地图点)/重定位(跟踪所有关键帧地图点) 得到位姿
-	   // 局部地图点跟踪 再优化位姿
-	    Track();// 跟踪后 就能够得到 位姿 
+	      //  【3】 track
+	   // Motion tracking (tracking the previous frame map point) / reference frame tracking (tracking the previous reference keyframe map point) / relocation (tracking all keyframe map points) to get the pose
+	   // Local map point tracking and re-optimized pose
+	    Track();// Pose can be obtained after tracking
 
 	    return mCurrentFrame.mTcw.clone();
 	}
 /*
-// 跟踪关键点 计算 相机位姿
-追踪这部分主要用了几种模型：
-运动模型 跟踪（Tracking with motion model）、
-参考关键帧 跟踪（Tracking with reference key frame）和
-重定位（Relocalization） 跟踪。
+// Track key points to calculate camera pose
+Tracking this part mainly uses several models:
+sports model track（Tracking with motion model）、
+reference keyframe track（Tracking with reference key frame）和
+reset（Relocalization） track。
 
-【1】运动模型 跟踪（Tracking with motion model）
-        跟踪上一帧的地图点
+【1】sports model track（Tracking with motion model）
+        Track the map point of the previous frame
         
-        上一帧的地图点 反投影到当前帧图像像素坐标上  和 当前帧的 关键点落在 同一个 格子内的 
-        做描述子匹配 搜索 可以加快匹配
+        The map points of the previous frame are back-projected to the pixel coordinates of the current frame image and the key points of the current frame, 
+	which fall in the same grid for descriptor matching and searching, which can speed up the matching. 
         
-	假设物体处于匀速运动，那么可以用上一帧的位姿和速度来估计当前帧的位姿。
-	上一帧的速度可以通过前面几帧的位姿计算得到。
-	这个模型适用于运动速度和方向比较一致，没有大转动的情形下，比如匀速运动的汽车、机器人、人等。
-	而对于运动比较随意的目标，当然就会失效了。此时就要用到下面两个模型。
+	Assuming that the object is moving at a uniform speed, the pose and velocity of the previous frame can be used to estimate the pose of the current frame.
+	The velocity of the previous frame can be calculated from the pose of the previous frames.
+	This model is suitable for situations where the movement speed and direction are relatively consistent and there is no large rotation, such as cars, robots, and people moving at a uniform speed.
+	And for targets with more casual movements, of course, it will fail. At this point, the following two models are used.
 
-【2】参考关键帧 跟踪（Tracking with reference key frame）
-	假如motion model已经失效，那么首先可以尝试和最近一个关键帧去做匹配(匹配关键帧中的地图点)。
-	毕竟当前帧和上一个关键帧的距离还不是很远。
-	作者利用了bag of words（BoW）来加速匹配。
+【2】reference keyframe track（Tracking with reference key frame）
+	If the motion model has failed, then you can first try to match with the latest keyframe (match the map point in the keyframe).
+	After all, the distance between the current frame and the previous keyframe is not very far.
+	The author utilizes bag of words (BoW) to speed up matching.
 	
-	关键帧和 当前帧 均用 字典单词线性表示向量
-        对应单词的 描述子 肯定比较相近 取对应单词的描述子进行匹配可以加速匹配
+	Both the key frame and the current frame are represented by a dictionary word linear vector
+        The descriptors of the corresponding words must be relatively similar, and matching the descriptors of the corresponding words can speed up the matching.
         
-	首先，计算当前帧的BoW，并设定初始位姿为上一帧的位姿；
-	其次，根据位姿和BoW词典来寻找特征匹配（参见ORB－SLAM（六）回环检测）；
-	最后，利用匹配的特征优化位姿（参见ORB－SLAM（五）优化）。
+	First, calculate the BoW of the current frame, and set the initial pose as the pose of the previous frame;
+	Second, find feature matching according to the pose and BoW dictionary (see ORB-SLAM (6) loop closure detection);
+	Finally, the pose is optimized using the matched features (see ORB-SLAM (5) optimization).
 
-【3】重定位（Relocalization） 跟踪
-       当前帧 用词典计算 字典单词线性表示向量
-       所有关键帧 用词典计算 字典单词线性表示向量
+【3】reset（Relocalization） track
+       The current frame is calculated with a dictionary, the dictionary word linear representation vector
+       All keyframes are computed using a dictionary, a dictionary word linear representation vector
        
-       计算 当前帧 的字典单词线性表示向量 和 所有关键帧 的 字典单词线性表示向量之间的距离 选取部分距离短的候选关键帧
-       当前帧和 候选关键帧 分别进行描述子 匹配
+       Calculate the dictionary word linearity of the current frame, which represents the dictionary word linearity between the vector and all key frames, and represents the distance between the vectors. Select some candidate key frames with short distances
+       The current frame and the candidate key frame, respectively, perform descriptor matching
        
-       	关键帧和 当前帧 均用 字典单词线性表示向量
-        对应单词的 描述子 肯定比较相近 取对应单词的描述子进行匹配可以加速匹配
+       	Both the key frame and the current frame are represented by a dictionary word linear vector
+        The descriptors of the corresponding words must be relatively similar. Matching the descriptors of the corresponding words can speed up the matching.
        
-      假如当前帧与最近邻关键帧的匹配也失败了，意味着此时当前帧已经丢了，无法确定其真实位置。
-      此时，只有去和所有关键帧匹配，看能否找到合适的位置。首先，计算当前帧的Bow向量。
-      其次，利用BoW词典选取若干关键帧作为备选（参见ORB－SLAM（六）回环检测）；
-      再次，寻找有足够多的特征点匹配的关键帧；最后，利用特征点匹配迭代求解位姿（RANSAC框架下，
-      因为相对位姿可能比较大，局外点会比较多）。
-      如果有关键帧有足够多的内点，那么选取该关键帧优化出的位姿。
+      If the matching between the current frame and the nearest neighbor keyframe also fails, it means that the current frame has been lost at this time, and its true position cannot be determined.
+      At this point, it is only necessary to match all keyframes to see if a suitable position can be found. First, compute the Bow vector of the current frame.
+      Second, use the BoW dictionary to select several key frames as candidates (see ORB-SLAM (6) loop closure detection);
+      Third, look for key frames with enough feature point matching; finally, use feature point matching to iteratively solve the pose (under the RANSAC framework, 
+      because the relative pose may be relatively large, there will be more outliers).
+      If a keyframe has enough interior points, select the pose optimized by that keyframe.
 
-　1）优先选择通过恒速运动模型，从LastFrame（上一普通帧）
-　      直接预测出（乘以一个固定的位姿变换矩阵）当前帧的姿态；
-    2）如果是静止状态或者运动模型匹配失效
-	  （运用恒速模型后反投影发现LastFrame的地图点和CurrentFrame的特征点匹配很少），
-	  通过增大参考帧的地图点反投影匹配范围，获取较多匹配后，计算当前位姿；
-    3）若这两者均失败，即代表tracking失败，mState!=OK，
-	  则在KeyFrameDataBase中用Bow搜索CurrentFrame的特征点匹配，
-	  进行全局重定位GlobalRelocalization，在RANSAC框架下使用EPnP求解当前位姿。  
+　1）Prefer to pass constant velocity motion model, from LastFrame (last normal frame)
+　      Directly predict (multiply by a fixed pose transformation matrix) the pose of the current frame;
+    2）If it is a static state or the motion model matching fails 
+           (after using the constant speed model, it is found that the map points of the LastFrame and the feature points of the CurrentFrame rarely match), 
+	   by increasing the matching range of the map point backprojection of the reference frame, after obtaining more matches , calculate the current pose;
+    3）If both of these fail, it means that the tracking fails, mState!=OK, 
+          then use Bow in KeyFrameDataBase to search for the feature point matching of CurrentFrame, perform global relocation GlobalRelocalization, 
+	  and use EPnP to solve the current pose under the RANSAC framework.
 	  
-      一旦我们通过上面三种模型获取了初始的相机位姿和初始的特征匹配，
-      就可以将完整的地图投影到当前帧中去搜索更多的匹配。但是投影完整的地图，
-      在large scale的场景中是很耗计算而且也没有必要的，
-      因此，这里使用了局部地图LocalMap来进行投影匹配。
+      Once we have obtained the initial camera pose and initial feature matches through the above three models, 
+      we can project the complete map into the current frame to search for more matches. However, 
+      projecting a complete map is computationally expensive and unnecessary in large scale scenarios. 
+      Therefore, a local map LocalMap is used here for projection matching.
       
-LocalMap包含：
-    与当前帧相连的关键帧K1，以及与K1相连的关键帧K2（一级二级相连关键帧）；
-    K1、K2对应的地图点；参考关键帧Kf。
+LocalMap contains:
+    The key frame K1 connected to the current frame, and the key frame K2 connected to K1 (first-level and second-level connected key frames);
+    Map points corresponding to K1 and K2; refer to the key frame Kf.
     
-匹配过程如下：
-        对局部地图点
-　　1. 抛弃投影范围超出相机画面的；
-　　2. 抛弃观测视角和地图点平均观测方向相差60o以上的；
-　　3. 抛弃特征点的尺度和地图点的尺度（通过高斯金字塔层数表示）不匹配的；
-　　4. 计算当前帧中特征点的尺度；
-　　5. 将地图点的描述子和当前帧ORB特征的描述子匹配，需要根据地图点尺度在初始位姿获取的粗略x投影位置附近搜索；
-　　6. 根据所有匹配点进行PoseOptimization优化。 
+The matching process is as follows:
+        for local map points
+　　1. Abandon the projection range beyond the camera screen;
+　　2. Discard the difference between the observation angle and the average observation direction of the map points by more than 60o;
+　　3. Discard the mismatch between the scale of feature points and the scale of map points (represented by the number of Gaussian pyramid layers);
+　　4. Calculate the scale of the feature points in the current frame;
+　　5. To match the descriptor of the map point with the descriptor of the ORB feature of the current frame, it is necessary to search around the rough x projection position obtained by the initial pose according to the scale of the map point;
+　　6. Perform PoseOptimization optimization based on all matching points.
 　　
-这三种跟踪模型都是为了获取相机位姿一个粗略的初值，
-后面会通过跟踪局部地图TrackLocalMap对位姿进行BundleAdjustment（捆集调整），
-进一步优化位姿。
+These three tracking models are all to obtain a rough initial value of the camera pose, 
+and then BundleAdjustment will be performed on the pose by tracking the local map TrackLocalMap to further optimize the pose.
 
 */
 /**
  * @brief Main tracking function. It is independent of the input sensor.
  *
- * Tracking 线程
+ * Tracking thread
  */
 	void Tracking::Track()
 	{
-// track包含两部分：估计运动(前后两帧的运动变换矩阵)、 跟踪局部地图(在地图中定位)
-     // mState 为 tracking的状态机
+	    // track contains two parts: estimated motion (motion transformation matrix of two frames before and after), tracking local map (positioning in the map)
+     	    // mState is the state machine for tracking
            // SYSTME_NOT_READY , NO_IMAGE_YET, NOT_INITIALIZED, OK, LOST
-           // 如果图像复位过、或者第一次运行，则为 NO_IMAGE_YET 状态
+           // NO_IMAGE_YET state if the image has been reset or run for the first time
 	    if(mState == NO_IMAGES_YET)
 	    {
-		mState = NOT_INITIALIZED;// 未初始化
+		mState = NOT_INITIALIZED;// Uninitialized
 	    }
 	    
-            // mLastProcessedState 存储了 Tracking最新的状态，用于 FrameDrawer中的绘制
+            // mLastProcessedState stores the latest state of Tracking for drawing in FrameDrawer
 	    mLastProcessedState = mState;
 
-	    // 对地图上锁 Get Map Mutex -> Map cannot be changed
+	    // lock the map Get Map Mutex -> Map cannot be changed
 	    unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
-// 步骤1：前一帧的跟踪, 系统未初始化 进行初始化 得到初始化位姿(跟踪估计运动) ==============================
+	    // Step 1: Tracking of the previous frame, the system is not initialized, initialize it, and get the initialization pose (tracking and estimated motion)
 	    if(mState == NOT_INITIALIZED)
 	    {
-            // 1. 单目/双目/RGBD初始化 得到第一帧下看到的3d点
+                // 1. Monocular / binocular / RGBD initialization to get the 3d point seen in the first frame
 		if(mSensor==System::STEREO || mSensor==System::RGBD)
-		    // 当前帧 特征点个数 大于500 进行初始化
-		    // 设置第一帧为关键帧  位姿为 [I 0] 
-		    // 根据第一帧视差求得的深度 计算3D点
-		    // 生成地图 添加地图点 地图点观测帧 地图点最好的描述子 更新地图点的方向和距离 
-		    // 关键帧的地图点 当前帧添加地图点  地图添加地图点
-		    // 显示地图  
-		    StereoInitialization();// 双目 / 深度初始化
+		    // The number of feature points in the current frame is greater than 500 for initialization
+		    // Set the first frame as a key frame and pose as [I 0]
+		    // Calculate the 3D point based on the depth obtained from the disparity of the first frame
+		    // Generate map Add map point Map point observation frame Map point best descriptor Update map point direction and distance
+		    // Map points for keyframes Add map points to the current frame Add map points to the map
+		    // show map 
+		    StereoInitialization();// binocular / deep initialization
 		else
-		      // 连续两帧特征点个数大于100个 且两帧 关键点orb特征匹配点对数 大于100个  
-		      // 初始帧 [I  0] 第二帧 基础矩阵/单应恢复 [R t] 全局优化  同时得到对应的 3D点
-		      // 创建地图 使用 最小化重投影误差BA 进行 地图优化 优化位姿 和地图点
-		      // 深度距离中值 倒数 归一化第二帧位姿的 平移向量 和 地图点的 三轴坐标
-		      // 显示更新  
-		    MonocularInitialization();// 单目初始化
+		      // The number of feature points in two consecutive frames is greater than 100 and the number of pairs of key points orb feature matching points in two frames is greater than 100
+		      // Initial frame [I 0] Second frame Fundamental matrix/homography recovery [R t] Global optimization and corresponding 3D points
+		      // Create Map Map Optimization Using Minimize Reprojection Error BA Optimize Pose and Map Points
+		      // Reciprocal of the median depth distance Normalized the translation vector of the second frame pose and the three-axis coordinates of the map point
+		      // show update
+		    MonocularInitialization();// Monocular initialization
 
-            // 2. 可视化显示当前帧位姿
-	    	mpFrameDrawer->Update(this);// 显示帧
+            // 2. Visually display the current frame pose
+	    	mpFrameDrawer->Update(this);// display frame
 		if(mState!=OK)
 		    return;
 	    }  
