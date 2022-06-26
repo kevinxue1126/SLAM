@@ -591,71 +591,70 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 				bOK = TrackReferenceKeyFrame();// If the tracking reference frame mode is greater than 10, return true
 			}
 		    }
-                // B. 更丢了，重定位模式===========================================================================
+                // B. More lost, relocation mode
 		    else
 		    {
-			bOK = Relocalization();//重定位  BOW搜索，PnP 3d-2d匹配 求解位姿
+			bOK = Relocalization();//Relocation BOW search, PnP 3d-2d matching Solve pose
 		    }
 		}
-            // 2. 已经有地图的情况下，则进行 跟踪 + 重定位（跟踪丢失后进行重定位）================================================		
+            // 2. If there is already a map, perform tracking + relocation (relocation after tracking is lost)================================================		
 		else
 		{
-	        // A.跟踪丢失 ======================================================================================
+	        // A.track lost======================================================================================
 		    if(mState==LOST)
 		    {
-			bOK = Relocalization();//重定位  BOW搜索，PnP 3d-2d匹配 求解位姿
+			bOK = Relocalization();//Relocation BOW search, PnP 3d-2d matching Solve pose
 		    }
-                // B. 正常跟踪
+                // B. normal tracking
 		    else
 		    {
-		        // mbVO 是 mbOnlyTracking 为true时的才有的一个变量
-                        // mbVO 为0表示此帧匹配了很多的MapPoints，跟踪很正常，
-                        // mbVO 为1表明此帧匹配了很少的MapPoints，少于10个，要跪的节奏      
+		        // mbVO is a variable that only exists when mbOnlyTracking is true
+                        // If mbVO is 0, it means that this frame matches a lot of MapPoints, and the tracking is normal.
+                        // mbVO of 1 indicates that this frame matches very few MapPoints, less than 10, the rhythm to kneel     
 			if(!mbVO)
 			{
-		   // a. 上一帧跟踪的点足够多=============================================
-                           // 1. 移动跟踪模式, 如果失败，尝试使用跟踪参考帧模式====
-			    if(!mVelocity.empty())// 在移动
+		   	   // a. There are enough points tracked in the previous frame
+                           // 1. Move tracking mode, if that fails, try to use tracking reference frame mode
+			    if(!mVelocity.empty())// on the move
 			    {
-				bOK = TrackWithMotionModel();// 恒速跟踪上一帧 模型
-				 if(!bOK)// 新添加，如果移动跟踪模式失败，尝试使用 跟踪参考帧模式 进行跟踪
+				bOK = TrackWithMotionModel();// Track the previous frame at a constant speed Model
+				 if(!bOK)// Newly added, if motion tracking mode fails, try to track with Tracking Reference Frame Mode
 				    bOK = TrackReferenceKeyFrame();
 			    }
-                           // 2. 使用跟踪参考帧模式===============================
-			    else//未移动
+                           // 2. Use Tracking Reference Frame Mode
+			    else//not moved
 			    {
-				bOK = TrackReferenceKeyFrame();// 跟踪 参考帧
+				bOK = TrackReferenceKeyFrame();// track reference frame
 			    }
 			}
-	         // b. 上一帧跟踪的点比较少(到了无纹理区域等)，要跪的节奏，既做跟踪又做定位========   	
-			else// mbVO为1，则表明此帧匹配了很少的3D map点，少于10个，要跪的节奏，既做 运动跟踪 又做 定位	
+	         // b. There are few points tracked in the previous frame (to the textureless area, etc.), the rhythm to kneel, both tracking and positioning========   	
+			else// If mbVO is 1, it means that this frame matches very few 3D map points, less than 10. The rhythm of kneeling is required to do both motion tracking and positioning
 			{
-                            // 使用 运动跟踪 和 重定位模式 计算两个位姿，如果重定位成功，使用重定位得到的位姿
+                            // Use motion tracking and relocation mode to calculate two poses, if the relocation is successful, use the pose obtained from the relocation
 			    bool bOKMM = false;
 			    bool bOKReloc = false;
 			    vector<MapPoint*> vpMPsMM;
 			    vector<bool> vbOutMM;
-			    cv::Mat TcwMM;// 视觉里程计跟踪得到的 位姿 结果
-			    if(!mVelocity.empty())// 有速度 运动跟踪模式
+			    cv::Mat TcwMM;// Pose results tracked by visual odometry
+			    if(!mVelocity.empty())// With speed motion tracking mode
 			    {
-				bOKMM = TrackWithMotionModel();// 运动跟踪模式跟踪上一帧 结果
-				vpMPsMM = mCurrentFrame.mvpMapPoints;// 地图点
-				vbOutMM = mCurrentFrame.mvbOutlier;  // 外点
-				TcwMM = mCurrentFrame.mTcw.clone();  // 保存视觉里程计 位姿 结果
+				bOKMM = TrackWithMotionModel();// Motion Tracking Mode Tracks Previous Frame Results
+				vpMPsMM = mCurrentFrame.mvpMapPoints;// map point
+				vbOutMM = mCurrentFrame.mvbOutlier;  // outer point
+				TcwMM = mCurrentFrame.mTcw.clone();  // Save visual odometry pose results
 			    }
 			    
-			    bOKReloc = Relocalization();// 重定位模式
-                         // 1.重定位没有成功，但运动跟踪 成功,使用跟踪的结果===================================
+			    bOKReloc = Relocalization();// relocation mode
+                         // 1.Relocation was unsuccessful, but motion tracking was successful, using tracking results===================================
 			    if(bOKMM && !bOKReloc)
 			    {
-				mCurrentFrame.SetPose(TcwMM);// 把帧的位置设置为 视觉里程计 位姿 结果
-				mCurrentFrame.mvpMapPoints = vpMPsMM;// 帧看到的地图点
-				mCurrentFrame.mvbOutlier = vbOutMM;// 外点
+				mCurrentFrame.SetPose(TcwMM);// set frame position to visual odometry pose result
+				mCurrentFrame.mvpMapPoints = vpMPsMM;// frame seen map point
+				mCurrentFrame.mvbOutlier = vbOutMM;// outer point
 
 				if(mbVO)
 				{
-				  // 这段代码是不是有点多余？应该放到TrackLocalMap函数中统一做
-				  // 更新当前帧的MapPoints被观测程度
+				  // Update the observed degree of MapPoints of the current frame
 				    for(int i =0; i<mCurrentFrame.N; i++)
 				    {
 					if(mCurrentFrame.mvpMapPoints[i] && !mCurrentFrame.mvbOutlier[i])
@@ -665,72 +664,71 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 				    }
 				}
 			    }
-		         // 2. 重定位模式 成功=================================================
-			    else if(bOKReloc)// 只要重定位成功整个跟踪过程正常进行（定位与跟踪，更相信重定位）
+		         // 2. relocation mode success=================================================
+			    else if(bOKReloc)// As long as the relocation is successful, the entire tracking process will proceed normally (location and tracking, more believe in relocation)
 			    {
-				mbVO = false;//重定位成功 
+				mbVO = false;//Relocation succeeded
 			    }
 
-			    bOK = bOKReloc || bOKMM;// 运动 跟踪 / 重定位 成功标志
+			    bOK = bOKReloc || bOKMM;// Motion Tracking/Relocation Success Sign
 			}
 		    }
 		}
 
-      // 步骤2. 局部地图跟踪=======================================================================================================	
-	      // 通过之前的计算，已经得到一个对位姿的初始估计，我们就能透过投影，
-	      // 从已经生成的地图点 中找到更多的对应关系，来精确结果
-	      // 三种模式的初始跟踪之后  进行  局部地图的跟踪
-	      // 局部地图点的描述子 和 当前帧 特征点(还没有匹配到地图点的关键点) 进行描述子匹配
-	      // 图优化进行优化  利用当前帧的特征点的像素坐标和 与其匹配的3D地图点  在其原位姿上进行优化
-	      // 匹配优化后 成功的点对数 一般情况下 大于30 认为成功
-	      // 在刚进行过重定位的情况下 需要大于50 认为成功
+      	      // Step 2. Local map tracking	
+	      // Through the previous calculations, an initial estimate of the pose has been obtained, 
+              // and we can find more correspondences from the map points that have been generated through projection to get accurate results
+	      // Following the initial tracking of the three modes, local map tracking is performed
+	      // The descriptor of the local map point and the feature point of the current frame (the key point that has not yet been matched to the map point) perform descriptor matching
+	      // Graph optimization to optimize using the pixel coordinates of the feature points of the current frame and the matching 3D map points to optimize on its original pose
+	      // After matching optimization, the number of successful point pairs is generally greater than 30 and considered successful
+	      // In the case of just relocation, it needs to be greater than 50 to be considered successful
 
-		mCurrentFrame.mpReferenceKF = mpReferenceKF;// 参考关键帧
-	 // 步骤2.1：在帧间匹配得到初始的姿态后，现在对local map进行跟踪得到更多的匹配，并优化当前位姿
-		// local map:当前帧、当前帧的MapPoints、当前关键帧与其它关键帧共视关系
-		// 在上面两两帧跟踪（恒速模型跟踪上一帧、跟踪参考帧），
-                // 这里搜索局部关键帧 后 搜集所有局部MapPoints，
-		// 然后将局部MapPoints和当前帧进行投影匹配，得到更多匹配的MapPoints后进行Pose优化
-             // 有建图线程
-		if(!mbOnlyTracking)// 跟踪 + 建图 + 重定位
+		mCurrentFrame.mpReferenceKF = mpReferenceKF;// reference keyframe
+	         // Step 2.1: After the initial pose is obtained by matching between frames, now track the local map to obtain more matches and optimize the current pose
+		// local map: the current frame, the MapPoints of the current frame, the co-viewing relationship between the current keyframe and other keyframes
+		// Tracking in the above two or two frames (the constant speed model tracks the previous frame, tracks the reference frame), 
+		// here searches for the local key frame and collects all the local MapPoints, 
+		// and then performs projection matching between the local MapPoints and the current frame to get more matching MapPoints. Pose optimization
+                // There is a mapping thread
+		if(!mbOnlyTracking)// Tracking + Mapping + Relocation
 		{
 		    if(bOK)
-			bOK = TrackLocalMap(); // 局部地图跟踪 g20优化 ------------------
+			bOK = TrackLocalMap(); // Local map tracking g20 optimization ------------------
 		}
-             // 无建图线程
-		else// 跟踪  + 重定位
+                // Local map tracking g20 optimization
+		else// Track + Relocate
 		{
 		    // mbVO true means that there are few matches to MapPoints in the map. We cannot retrieve
 		    // a local map and therefore we do not perform TrackLocalMap(). Once the system relocalizes
 		    // the camera we will use the local map again.
-		    if(bOK && !mbVO)// 重定位成功
-			bOK = TrackLocalMap();// 局部地图跟踪--------------------------
+		    if(bOK && !mbVO)// Relocation succeeded
+			bOK = TrackLocalMap();// local map tracking--------------------------
 		}
 
 		if(bOK)
 		    mState = OK;
 		else
-		    mState=LOST;// 丢失
+		    mState=LOST;// lost
 
 		// Update drawer
-		//  更新显示
 		mpFrameDrawer->Update(this);
 
 
-       // 步骤2.2 局部地图跟踪成功, 根系运动模型，清除外点等，检查是否需要创建新的关键帧
+                // Step 2.2 Local map tracking is successful, root motion model, clear outliers, etc., check whether new keyframes need to be created
 		if(bOK)
 		{
-	       // a. 有运动，则更新运动模型 Update motion model 运动速度为前后两针的 变换矩阵
+	       // a. If there is motion, update the motion model Update motion model The motion speed is the transformation matrix of the two needles before and after
 		    if(!mLastFrame.mTcw.empty())
 		    {      
 			cv::Mat LastTwc = cv::Mat::eye(4,4,CV_32F);
 			mLastFrame.GetRotationInverse().copyTo(LastTwc.rowRange(0,3).colRange(0,3));
 			mLastFrame.GetCameraCenter().copyTo(LastTwc.rowRange(0,3).col(3));
-			mVelocity = mCurrentFrame.mTcw*LastTwc;//运动速度 为前后两针的 变换矩阵
+			mVelocity = mCurrentFrame.mTcw*LastTwc;//The movement speed is the transformation matrix of the front and rear needles
 		    }
 		    else
-			mVelocity = cv::Mat();// 无速度
-                    // 显示 当前相机位姿 
+			mVelocity = cv::Mat();//no speed
+                    // Display the current camera pose
 		    mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
 
                // b. 清除 UpdateLastFrame 中为当前帧 临时添加的 MapPoints	    
