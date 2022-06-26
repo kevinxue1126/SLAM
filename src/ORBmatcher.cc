@@ -983,124 +983,121 @@ namespace ORB_SLAM2
 
 	    for(size_t i=0, iend=vMatches12.size(); i<iend; i++)
 	    {
-		if(vMatches12[i]<0)// 无匹配点
+		if(vMatches12[i]<0)// no match point
 		    continue;
-		vMatchedPairs.push_back(make_pair(i,vMatches12[i]));//保留匹配点对关系
+		vMatchedPairs.push_back(make_pair(i,vMatches12[i]));//Keep matching point-to-point relationships
 	    }
 
 	    return nmatches;
 	}
 
 
-  /**
-  * @brief 将MapPoints投影到关键帧pKF中，并判断是否有重复的MapPoints
-  * 1.如果MapPoint能匹配关键帧的特征点，并且该特征点有对应的MapPoint，那么将两个MapPoint合并（选择观测数多的）
-  * 2.如果MapPoint能匹配关键帧的特征点，并且该特征点没有对应的MapPoint，那么为该特征点点添加地图点MapPoint
-  * @param  pKF          相邻关键帧
-  * @param  vpMapPoints 需要融合的 当前帧上的 MapPoints
-  * @param  th             搜索半径的因子
-  * @return                   重复MapPoints的数量
-  */
+	  /**
+	  * @brief Project MapPoints into keyframe pKF and determine if there are duplicate MapPoints
+	  * 1. If the MapPoint can match the feature point of the key frame, and the feature point has a corresponding MapPoint, then merge the two MapPoints (select the one with more observations)
+	  * 2. If MapPoint can match the feature point of the key frame, and the feature point does not have a corresponding MapPoint, then add a map point MapPoint for the feature point
+	  * @param  pKF          adjacent keyframes
+	  * @param  vpMapPoints  mapPoints on the current frame that need to be fused
+	  * @param  th           factor for search radius
+	  * @return              number of repeating MapPoints
+	  */
 	int ORBmatcher::Fuse(KeyFrame *pKF, const vector<MapPoint *> &vpMapPoints, const float th)
 	{
-	    // 关键帧 的 旋转矩阵 和 平移矩阵  欧式变换
+	    // Rotation and translation matrices of keyframes    Euclidean transformation
 	    cv::Mat Rcw = pKF->GetRotation();
 	    cv::Mat tcw = pKF->GetTranslation();
-	    // 相机内参数
+	    // In-camera parameters
 	    const float &fx = pKF->fx;
 	    const float &fy = pKF->fy;
 	    const float &cx = pKF->cx;
 	    const float &cy = pKF->cy;
-	    const float &bf = pKF->mbf;// 基线×f
-	    // 关键帧 的 相机坐标中心点坐标 
+	    const float &bf = pKF->mbf;// Baseline ×f
+	    // The camera coordinates of the key frame center point coordinates
 	    cv::Mat Ow = pKF->GetCameraCenter();
 
-	    int nFused=0;// 融合地图点的数量
-	    const int nMPs = vpMapPoints.size();// 需要融合的 地图点数量
-	//步骤1：  遍历所有的MapPoints
+	    int nFused=0;// The number of fused map points
+	    const int nMPs = vpMapPoints.size();// The number of map points to be fused
+	    // Step 1: Iterate over all MapPoints
 	    for(int i=0; i<nMPs; i++)
 	    {
-		MapPoint* pMP = vpMapPoints[i];// 地图点
+		MapPoint* pMP = vpMapPoints[i];// map point
 		
-	//步骤2： 跳过不好的地图点
-		if(!pMP)// 不存在
+		//Step 2: Skip Bad Map Points
+		if(!pMP)// does not exist
 		    continue;
-		// 地图点 是坏点  地图点 被 关键帧观测到 已经匹配好了 不用 融合
+		// The map point is a bad point. The map point is observed by the key frame. It has been matched and does not need to be fused.
 		if(pMP->isBad() || pMP->IsInKeyFrame(pKF))
 		    continue;
 
-	// 步骤3： 将地图点 投影在 关键帧 图像像素坐标上	
-		cv::Mat p3Dw = pMP->GetWorldPos();// 地图点在 世界坐标系下的坐标
-		cv::Mat p3Dc = Rcw*p3Dw + tcw;// 地图点在 关键帧下相机坐标系下的 坐标
+		// Step 3: Project map points on keyframe image pixel coordinates	
+		cv::Mat p3Dw = pMP->GetWorldPos();// The coordinates of the map point in the world coordinate system
+		cv::Mat p3Dc = Rcw*p3Dw + tcw;// The coordinates of the map point in the camera coordinate system under the key frame
 		// Depth must be positive
-		// 深度值必须为正  在 帧(相机)的前方
 		if(p3Dc.at<float>(2)<0.0f)
 		    continue;
-		const float invz = 1/p3Dc.at<float>(2);// 深度归一化 因子
-		const float x = p3Dc.at<float>(0)*invz;// 相机归一化尺度下的坐标
+		const float invz = 1/p3Dc.at<float>(2);// depth normalization factor
+		const float x = p3Dc.at<float>(0)*invz;// Coordinates at the normalized scale of the camera
 		const float y = p3Dc.at<float>(1)*invz;
-		// 像素坐标
+		// pixel coordinates
 		const float u = fx*x+cx;
 		const float v = fy*y+cy;
-		// 像素坐标 必须在 图像尺寸范围内 Point must be inside the image
+		// Point must be inside the image
 		if(!pKF->IsInImage(u,v))
 		    continue;
 		
-	//步骤4：  判断距离是否在尺度协方差范围内
+		// Step 4: Determine whether the distance is within the scale covariance range
 		const float maxDistance = pMP->GetMaxDistanceInvariance();
 		const float minDistance = pMP->GetMinDistanceInvariance();
 		cv::Mat PO = p3Dw-Ow;
-		//地图点 距离相机的距离 进而推断 在图像金字塔中可能的尺度 越远尺度小 越近尺度大
+		// The distance of the map point from the camera and then infer the possible scale in the image pyramid, the farther the scale is, the smaller the scale is, and the closer the scale is.
 		const float dist3D = cv::norm(PO);
 		// Depth must be inside the scale pyramid of the image
 		if(dist3D<minDistance || dist3D>maxDistance )
-		    continue;//  剔除
+		    continue;//  cull
 
-	//步骤5：观察视角 必须小于 60度  Viewing angle must be less than 60 deg
+		//Step 5:Viewing angle must be less than 60 deg
 		cv::Mat Pn = pMP->GetNormal();
 		if(PO.dot(Pn)<0.5*dist3D)
 		    continue;
-		// 根据深度 预测 地图点 在 帧 图像上 的尺度   深度大尺度小  深度小尺度大
+		// Predict the scale of the map point on the frame image according to the depth, the large scale of the depth is small, and the small scale of the depth is large.
 		int nPredictedLevel = pMP->PredictScale(dist3D,pKF);
 
-	// 步骤6： 根据尺度确定搜索半径 进而在图像上确定 候选 关键点	
+		// Step 6: Determine the search radius according to the scale and then determine the candidate key points on the image
 		const float radius = th*pKF->mvScaleFactors[nPredictedLevel];
 		const vector<size_t> vIndices = pKF->GetFeaturesInArea(u,v,radius);
 		if(vIndices.empty())
 		    continue;
 		
-	//  步骤7：遍历候选关键点  计算与地图点  描述子匹配 计算距离 保留最近距离的匹配
-		// Match to the most similar keypoint in the radius
-		const cv::Mat dMP = pMP->GetDescriptor();// 地图点描述子
+		// Step 7: Match to the most similar keypoint in the radius
+		const cv::Mat dMP = pMP->GetDescriptor();// map point descriptor
 		int bestDist = 256;
 		int bestIdx = -1;
 		// vector<size_t>::const_iterator 
 		for(auto vit=vIndices.begin(), vend=vIndices.end(); vit!=vend; vit++)
 		{
 		    const size_t idx = *vit;
-		//  关键点的尺度 需要在 预测尺度 之上
-		    const cv::KeyPoint &kp = pKF->mvKeysUn[idx];// 关键帧 候选关键点
-		    const int &kpLevel= kp.octave;// 关键点尺度
+		    //  The scale of keypoints needs to be above the predicted scale
+		    const cv::KeyPoint &kp = pKF->mvKeysUn[idx];// keyframe candidate keypoint
+		    const int &kpLevel= kp.octave;// keypoint scale
 		    if(kpLevel<nPredictedLevel-1 || kpLevel>nPredictedLevel)
 			continue;
-	// 步骤8：计算MapPoint投影的坐标与这个区域特征点的距离，如果偏差很大，直接跳过特征点匹配	    
-		//   深度/双目相机  有 右图像 匹配点横坐标差值
+		    // Step 8: Calculate the distance between the coordinates of the MapPoint projection and the feature points in this area. If the deviation is large, skip the feature point matching directly	    
 		    if(pKF->mvuRight[idx]>=0)
 		    {
-			const float ur = u - bf*invz;//和 匹配点 横坐标  深度相机和 双目相机 有
+			const float ur = u - bf*invz;
 			// Check reprojection error in stereo
 			const float &kpx = kp.pt.x;
 			const float &kpy = kp.pt.y;
 			const float &kpr = pKF->mvuRight[idx];
-			const float ex = u - kpx;// 横坐标差值
-			const float ey = v - kpy;//纵坐标差值
-			const float er = ur - kpr;// 右图像 匹配点横坐标差值 
+			const float ex = u - kpx;// abscissa difference
+			const float ey = v - kpy;// vertical coordinate difference
+			const float er = ur - kpr;// Right image matching point abscissa difference
 			const float e2 = ex*ex + ey*ey + er*er;
 
 			if(e2 * pKF->mvInvLevelSigma2[kpLevel] > 7.8)
-			    continue;// 差值过大 直接跳过
+			    continue;// If the difference is too large, skip it directly
 		    }
-	      //  单目相机      无右图像 匹配点横坐标差值
+	      	     //  Monocular camera No right image Match point abscissa difference
 		    else
 		    {
 			const float &kpx = kp.pt.x;
