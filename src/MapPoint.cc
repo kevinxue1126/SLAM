@@ -401,25 +401,26 @@ namespace ORB_SLAM2
 		KeyFrame* pKF = mit->first;// observation key frame
 		cv::Mat Owi = pKF->GetCameraCenter();// Observe the keyframe camera coordinate center
 		cv::Mat normali = mWorldPos - Owi;//The relative coordinates (direction vector) of the 3D point to the camera center of the observation frame
-		normal = normal + normali/cv::norm(normali);//归一化后相加 
+		normal = normal + normali/cv::norm(normali);//Add after normalization
 		n++;
 	    }
-// 【2】更新观测深度  在参考帧下 各个图像金字塔下 的距离----------------------
-    // 通常来说，距离较近的地图点，将在金字塔层数较高的地方提取出，距离较远的地图点，
-    // 在金字塔层数较低的地方提取出（金字塔层数越低，分辨率越高，才能识别出远点）
-	    cv::Mat PC = Pos - pRefKF->GetCameraCenter();// 相对于参考帧 相机中心 的 相对坐标
-	    const float dist = cv::norm(PC);// 3D点相对于 参考帧相机中心的 距离
-	    // 因此通过地图点的信息（主要是对应描述子），我们可以获得该地图点对应的金字塔层级：
-	    const int level = pRefKF->mvKeysUn[observations[pRefKF]].octave;// 在 参考帧下 图像金字塔 中的层级位置
-	    const float levelScaleFactor =  pRefKF->mvScaleFactors[level];// 对应层级下 的尺度因子
+    	    //[2] Update the observation depth under the reference frame and the distance under each image pyramid
+    	    // Generally speaking, map points with a closer distance will be extracted at a higher level of the pyramid, 
+	    // and map points with a farther distance will be extracted at a lower level of the pyramid (the lower the pyramid level, 
+	    // the higher the resolution). high to identify the far point)
+	    cv::Mat PC = Pos - pRefKF->GetCameraCenter();// Relative coordinates of the camera center relative to the reference frame
+	    const float dist = cv::norm(PC);// The distance of the 3D point relative to the camera center of the reference frame
+	    // Therefore, through the information of the map point (mainly the corresponding descriptor), we can obtain the pyramid level corresponding to the map point:
+	    const int level = pRefKF->mvKeysUn[observations[pRefKF]].octave;// Hierarchical position in the image pyramid under the reference frame
+	    const float levelScaleFactor =  pRefKF->mvScaleFactors[level];// The scale factor at the corresponding level
 	    const int nLevels = pRefKF->mnScaleLevels;
 	    {
 		unique_lock<mutex> lock3(mMutexPos);
 		
-		// 乘上参考帧中描述子获取时金字塔放大尺度，得到最大距离mfMaxDistance
-		mfMaxDistance = dist*levelScaleFactor;// 原来的距离 在 对于层级尺度下的 距离
+		// Multiply the scale of the pyramid when the descriptor in the reference frame is acquired to obtain the maximum distance mfMaxDistance
+		mfMaxDistance = dist*levelScaleFactor;// The original distance is the distance at the for-hierarchy scale
 		
-		// 最大距离除以整个金字塔最高层的放大尺度得到最小距离mfMinDistance。
+		// Divide the maximum distance by the magnification scale of the highest level of the entire pyramid to get the minimum distance mfMinDistance
 		mfMinDistance = mfMaxDistance/pRefKF->mvScaleFactors[nLevels-1];
 		mNormalVector = normal/n;
 	    }
@@ -428,30 +429,29 @@ namespace ORB_SLAM2
 	float MapPoint::GetMinDistanceInvariance()
 	{
 	    unique_lock<mutex> lock(mMutexPos);
-	    return 0.8f*mfMinDistance;// 各个图像金字塔下 的距离 最小距离
+	    return 0.8f*mfMinDistance;// Distance under each image pyramid, minimum distance
 	}
 
 	float MapPoint::GetMaxDistanceInvariance()
 	{
 	    unique_lock<mutex> lock(mMutexPos);
-	    return 1.2f*mfMaxDistance;// 各个图像金字塔下 的距离 最大距离
+	    return 1.2f*mfMaxDistance;// Distance under each image pyramid, maximum distance
 	}
 
 /*
- 注意金字塔ScaleFactor和距离的关系：
-      当前特征点对应ScaleFactor为1.2的意思是：
-          图片分辨率下降1.2倍后，可以提取出该特征点
-              （分辨率更高时，肯定也可以提取出，
-                  这里取金字塔中能够提取出该特征点最高层级作为该特征点的层级）
+ Note the relationship between the pyramid ScaleFactor and distance:
+ The current feature point corresponding to ScaleFactor of 1.2 means:
+ After the image resolution is reduced by 1.2 times, the feature point can be extracted (when the resolution is higher, 
+ it can also be extracted. Here, the highest level of the feature point can be extracted from the pyramid as the level of the feature point)
 
-同时，由当前特征点的距离，可以推测所在层级。
+ At the same time, from the distance of the current feature point, the level can be inferred.
  */	
 	int MapPoint::PredictScale(const float &currentDist, KeyFrame* pKF)
 	{
 	    float ratio;
 	    {
 		unique_lock<mutex> lock(mMutexPos);
-		ratio = mfMaxDistance/currentDist;//当前特征点的距离
+		ratio = mfMaxDistance/currentDist;//The distance of the current feature point
 	    }
 
 	    int nScale = ceil(log(ratio)/pKF->mfLogScaleFactor);
@@ -460,7 +460,7 @@ namespace ORB_SLAM2
 	    else if(nScale>=pKF->mnScaleLevels)
 		nScale = pKF->mnScaleLevels-1;
 
-	    return nScale;// 预测尺度
+	    return nScale;// prediction scale
 	}
 
 	int MapPoint::PredictScale(const float &currentDist, Frame* pF)
