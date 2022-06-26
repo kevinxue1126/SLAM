@@ -909,10 +909,10 @@ namespace ORB_SLAM2
 
      
       
-	/**
-	 * @brief    Request closed loop detection thread restart
-	 * @param    None
-	 */  
+      /**
+	* @brief    Request closed loop detection thread restart
+	* @param    None
+	*/  
       void LoopClosing::RequestReset()
       {
 	  {
@@ -931,10 +931,10 @@ namespace ORB_SLAM2
 	  }
       }
       
-/**
- * @brief    请求闭环检测线程重启 成功 进行重启
- * @param 无
- */ 
+      /**
+	* @brief    Request closed loop detection thread restart
+	* @param    None
+	*/ 
       void LoopClosing::ResetIfRequested()
       {
 	  unique_lock<mutex> lock(mMutexReset);
