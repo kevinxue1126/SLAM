@@ -1653,60 +1653,58 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	}
 	
 
-// 需要 关键帧 吗
-/*
-确定关键帧的标准如下：
-（1）在上一个全局重定位后，又过了20帧；
-（2）局部建图闲置，或在上一个关键帧插入后，又过了20帧；
-（3)当前帧跟踪到大于50个点；
-（4）当前帧跟踪到的比参考关键帧少90%。
-*/
-/**
- * @brief 断当前帧是否为关键帧
- * @return true if needed
- */
+	/*
+	  The criteria for determining keyframes are as follows:
+	 (1) After the last global relocation, another 20 frames have passed;
+	 (2) The local mapping is idle, or 20 frames have passed after the last key frame was inserted;
+	 (3) The current frame is tracked to more than 50 points;
+	 (4) The current frame tracks 90% less than the reference key frame.
+	*/
+	/**
+	 * @brief Whether the current frame is a keyframe
+	 * @return true if needed
+	 */
 	bool Tracking::NeedNewKeyFrame()
 	{
- // 步骤1：如果用户在界面上选择重定位，那么将不插入关键帧
-            // 由于插入关键帧过程中会生成MapPoint，因此用户选择重定位后地图上的点云和关键帧都不会再增加
-	    if(mbOnlyTracking)// 不建图 不需要关键帧
+ 	    // Step 1: If the user chooses to reposition on the interface, then no keyframes will be inserted
+            // Since MapPoints are generated during the insertion of keyframes, the point cloud and keyframes on the map will not increase after the user chooses to relocate
+	    if(mbOnlyTracking)// No mapping, no keyframes required
 		return false;
 
 	    // If Local Mapping is freezed by a Loop Closure do not insert keyframes
-	    // 建图线程 停止了
+	    // Mapping thread stopped
 	    if(mpLocalMapper->isStopped() || mpLocalMapper->stopRequested())
 		return false;
-	    // 地图中的 关键帧 数量
+	    // Number of keyframes in the map
 	    const int nKFs = mpMap->KeyFramesInMap();
 
 	    // Do not insert keyframes if not enough frames have passed from last relocalisation
-	    // 刚刚重定位不久不需要插入关键帧  关键帧总数超过最大值也不需要 插入关键帧
-    // Do not insert keyframes if not enough frames have passed from last relocalisation
-// 步骤2：判断是否距离上一次插入关键帧的时间太短
-	      // mCurrentFrame.mnId是当前帧的ID
-	      // mnLastRelocFrameId是最近一次重定位帧的ID
-	      // mMaxFrames等于图像输入的帧率
-	      // 如果关键帧比较少，则考虑插入关键帧
-	      // 或距离上一次重定位超过1s，则考虑插入关键帧
+	    // No need to insert keyframes just after repositioning The total number of keyframes exceeds the maximum value and no need to insert keyframes
+    	    // Do not insert keyframes if not enough frames have passed from last relocalisation
+            // Step 2: Determine whether the time since the last keyframe was inserted is too short
+	    // mCurrentFrame.mnId is the ID of the current frame
+	    // mnLastRelocFrameId is the ID of the last relocated frame
+	    // mMaxFrames is equal to the frame rate of the image input
+	    // If there are few keyframes, consider inserting keyframes or if it is more than 1s from the last reposition, consider inserting keyframes
 	    if(mCurrentFrame.mnId < mnLastRelocFrameId + mMaxFrames && nKFs > mMaxFrames)
 		return false;
 	    
-// 步骤3：得到参考关键帧跟踪到的MapPoints数量
-	// 在UpdateLocalKeyFrames函数中会将与当前关键帧共视程度最高的关键帧设定为当前帧的参考关键帧
+	     // Step 3: Get the number of MapPoints tracked by the reference keyframe
+	    // In the UpdateLocalKeyFrames function, the key frame with the highest degree of common view with the current key frame is set as the reference key frame of the current frame
 	    // Tracked MapPoints in the reference keyframe
 	    int nMinObs = 3;
 	    if(nKFs <= 2)
 		nMinObs = 2;
 	    int nRefMatches = mpReferenceKF->TrackedMapPoints(nMinObs);
-// 步骤4：查询局部地图管理器是否繁忙
-	    // Local Mapping accept keyframes?
+	    
+	    // Step 4: Query whether the local map manager is busy
 	    bool bLocalMappingIdle = mpLocalMapper->AcceptKeyFrames();
 	    
-// 步骤5：对于双目或RGBD摄像头，统计总的可以添加的MapPoints数量和跟踪到地图中的MapPoints数量
+	     // Step 5: For binocular or RGBD cameras, count the total number of MapPoints that can be added and the number of MapPoints tracked into the map
 	    // Check how many "close" points are being tracked and how many could be potentially created.
 	    int nNonTrackedClose = 0;
 	    int nTrackedClose= 0;
-	    if(mSensor != System::MONOCULAR)// 双目或rgbd
+	    if(mSensor != System::MONOCULAR)// binocular or rgbd
 	    {
 		for(int i =0; i<mCurrentFrame.N; i++)
 		{
@@ -1722,28 +1720,28 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 
 	    bool bNeedToInsertClose = (nTrackedClose<100) && (nNonTrackedClose>70);
 	    
-// 步骤6：决策是否需要插入关键帧
+	    // Step 6: Decide whether to insert keyframes
 	    // Thresholds
-	    // 设定inlier阈值，和之前帧特征点匹配的inlier比例
-	    // Thresholds 设定inlier阈值，和之前帧特征点匹配的inlier比例
+	    // Set the inlier threshold, the inlier ratio that matches the feature points of the previous frame
+	    // Thresholds sets the inlier threshold, the inlier ratio that matches the feature points of the previous frame
 	    float thRefRatio = 0.75f;
 	    if(nKFs<2)
-		thRefRatio = 0.4f;// 关键帧只有一帧，那么插入关键帧的阈值设置很低
+		thRefRatio = 0.4f;// There is only one keyframe, so the threshold for inserting keyframes is very low
 
 	    if(mSensor==System::MONOCULAR)
 		thRefRatio = 0.9f;
 
 	    // Condition 1a: More than "MaxFrames" have passed from last keyframe insertion
-	    // 很长时间没有插入关键帧
+	    // No keyframes inserted for a long time
 	    const bool c1a = mCurrentFrame.mnId >= mnLastKeyFrameId+mMaxFrames;
 	    // Condition 1b: More than "MinFrames" have passed and Local Mapping is idle
-	    // localMapper处于空闲状态
+	    // localMapper is idle
 	    const bool c1b = (mCurrentFrame.mnId >= mnLastKeyFrameId+mMinFrames && bLocalMappingIdle);
 	    //Condition 1c: tracking is weak
-	    // 跟踪要跪的节奏，0.25和0.3是一个比较低的阈值
+	    // Track the rhythm of kneeling, 0.25 and 0.3 is a relatively low threshold
 	    const bool c1c =  mSensor!=System::MONOCULAR && (mnMatchesInliers<nRefMatches*0.25 || bNeedToInsertClose) ;
 	    // Condition 2: Few tracked points compared to reference keyframe. Lots of visual odometry compared to map matches.
-	   // 阈值比c1c要高，与之前参考帧（最近的一个关键帧）重复度不是太高
+	   // The threshold is higher than c1c, and the repetition with the previous reference frame (the most recent key frame) is not too high
 	    const bool c2 = ((mnMatchesInliers < nRefMatches*thRefRatio|| bNeedToInsertClose) && mnMatchesInliers>15);
 
 	    if((c1a||c1b||c1c)&&c2)
@@ -1759,9 +1757,9 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 		    mpLocalMapper->InterruptBA();
 		    if(mSensor!=System::MONOCULAR)
 		    {
-			// 队列里不能阻塞太多关键帧
-			// tracking插入关键帧不是直接插入，而且先插入到mlNewKeyFrames中，
-			// 然后localmapper再逐个pop出来插入到mspKeyFrames
+			// Too many keyframes cannot be blocked in the queue
+			// The keyframes inserted by tracking are not inserted directly, 
+			// but are inserted into mlNewKeyFrames first, and then localmapper pops them out one by one and inserts them into mspKeyFrames
 			if(mpLocalMapper->KeyframesInQueue()<3)
 			    return true;
 			else
@@ -1775,38 +1773,38 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 		return false;
 	}
 	
-/**
- * @brief 创建新的关键帧
- *
- * 对于非单目的情况，同时创建新的MapPoints
- */
+	/**
+	 * @brief Create new keyframes
+	 *
+	 * For non-single-purpose cases, create new MapPoints at the same time
+	 */
 	void Tracking::CreateNewKeyFrame()
 	{
 	    if(!mpLocalMapper->SetNotStop(true))
 		return;
-	    // 关键帧 加入到地图 加入到 关键帧数据库
+	    // keyframe add to map add to keyframe database
 	    
-// 步骤1：将当前帧构造成关键帧	    
+	    // Step 1: Construct the current frame into a keyframe	    
 	    KeyFrame* pKF = new KeyFrame(mCurrentFrame,mpMap,mpKeyFrameDB);
 	    
-// 步骤2：将当前关键帧设置为当前帧的参考关键帧
-    // 在UpdateLocalKeyFrames函数中会将与当前关键帧共视程度最高的关键帧设定为当前帧的参考关键帧
+	    // Step 2: Set the current keyframe as the reference keyframe for the current frame
+    	    // In the UpdateLocalKeyFrames function, the key frame with the highest degree of common view with the current key frame is set as the reference key frame of the current frame
 	    mpReferenceKF = pKF;
 	    mCurrentFrame.mpReferenceKF = pKF;
 	    
-    // 这段代码和UpdateLastFrame中的那一部分代码功能相同
-// 步骤3：对于双目或rgbd摄像头，为当前帧生成新的MapPoints
+    	    // This code has the same function as that part of the code in UpdateLastFrame
+	    // Step 3: For binocular or rgbd cameras, generate new MapPoints for the current frame
 	    if(mSensor != System::MONOCULAR)
 	    {
-	      // 根据Tcw计算mRcw、mtcw和mRwc、mOw
+	      // Calculate mRcw, mtcw and mRwc, mOw from Tcw
 		mCurrentFrame.UpdatePoseMatrices();
 
 		// We sort points by the measured depth by the stereo/RGBD sensor.
 		// We create all those MapPoints whose depth < mThDepth.
 		// If there are less than 100 close points we create the 100 closest.
-		// 双目 / 深度
-     // 步骤3.1：得到当前帧深度小于阈值的特征点
-               // 创建新的MapPoint, depth < mThDepth
+		// binocular / depth
+     		// Step 3.1: Get the feature points whose depth of the current frame is less than the threshold
+               // Create new MapPoint, depth < mThDepth
 		vector<pair<float,int> > vDepthIdx;
 		vDepthIdx.reserve(mCurrentFrame.N);
 		for(int i=0; i<mCurrentFrame.N; i++)
@@ -1820,9 +1818,9 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 
 		if(!vDepthIdx.empty())
 		{
-	         // 步骤3.2：按照深度从小到大排序  
+	         // Step 3.2: Sort by depth from small to large
 		    sort(vDepthIdx.begin(),vDepthIdx.end());
-                 // 步骤3.3：将距离比较近的点包装成MapPoints
+                 // Step 3.3: Pack the points that are relatively close into MapPoints
 		    int nPoints = 0;
 		    for(size_t j=0; j<vDepthIdx.size();j++)
 		    {
@@ -1843,7 +1841,7 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 			{
 			    cv::Mat x3D = mCurrentFrame.UnprojectStereo(i);
 			    MapPoint* pNewMP = new MapPoint(x3D,pKF,mpMap);
-			    // 这些添加属性的操作是每次创建MapPoint后都要做的
+			    // These operations of adding properties are done every time a MapPoint is created
 			    pNewMP->AddObservation(pKF,i);
 			    pKF->AddMapPoint(pNewMP,i);
 			    pNewMP->ComputeDistinctiveDescriptors();
@@ -1857,9 +1855,9 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 			{
 			    nPoints++;
 			}
-                // 这里决定了双目和rgbd摄像头时地图点云的稠密程度
-                // 但是仅仅为了让地图稠密直接改这些不太好，
-                // 因为这些MapPoints会参与之后整个slam过程
+                	// This determines the density of the map point cloud for the binocular and rgbd cameras
+                	// But it's not good to change these just to make the map dense, 
+ 			// because these MapPoints will participate in the entire slam process later
 			if(vDepthIdx[j].first>mThDepth && nPoints>100)
 			    break;
 		    }
@@ -1871,28 +1869,28 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	    mpLocalMapper->SetNotStop(false);
 
 
-    // 为点云建图线程，加入关键帧和对应的彩色图和深度图 insert Key Frame into point cloud viewer
+    // insert Key Frame into point cloud viewer
     mpPointCloudMapping->insertKeyFrame( pKF, this->mImGray, this->mImDepth, this->mImRGB );
 
 	    mnLastKeyFrameId = mCurrentFrame.mnId;
 	    mpLastKeyFrame = pKF;
 	}
 	
-/**
- * @brief 对Local MapPoints进行跟踪
- * 搜索 在对应当前帧的局部地图内搜寻和 当前帧地图点匹配点的 局部地图点
- * 局部地图点 搜寻和当前帧 关键点描述子 的匹配 有匹配的加入到 当前帧 特征点对应的地图点中
- * 
- * 在局部地图中查找在当前帧视野范围内的点，将视野范围内的点和当前帧的特征点进行投影匹配
- */
+	/**
+	 * @brief Tracking Local MapPoints
+	 * Search Search the local map point corresponding to the current frame's local map point that matches the current frame's map point
+	 * The local map point is searched for matching with the current frame key point descriptor, and the matched ones are added to the map points corresponding to the current frame feature points
+	 * 
+	 * Find the points within the field of view of the current frame in the local map, and perform projection matching between the points within the field of view and the feature points of the current frame
+	 */
 	void Tracking::SearchLocalPoints()
 	{
 	    // Do not search map points already matched
-// 步骤1：遍历当前帧的mvpMapPoints，标记这些MapPoints不参与之后的搜索
-           // 因为当前的mvpMapPoints一定在当前帧的视野中
+	    // Step 1: Traverse the mvpMapPoints of the current frame and mark these MapPoints not to participate in subsequent searches
+           // Because the current mvpMapPoints must be in the field of view of the current frame
 	    for(vector<MapPoint*>::iterator vit=mCurrentFrame.mvpMapPoints.begin(), vend=mCurrentFrame.mvpMapPoints.end(); vit !=vend; vit++)
 	    {
-		MapPoint* pMP = *vit;// 当前帧的地图点
+		MapPoint* pMP = *vit;// map point for the current frame
 		if(pMP)
 		{
 		    if(pMP->isBad())
@@ -1901,9 +1899,9 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 		    }
 		    else
 		    {
-			pMP->IncreaseVisible(); // 更新能观测到该点的帧数加1
-			pMP->mnLastFrameSeen = mCurrentFrame.mnId;// 标记该点被当前帧观测到
-			pMP->mbTrackInView = false;// 标记该点将来不被投影，因为已经匹配过
+			pMP->IncreaseVisible(); // Update the number of frames where the point can be observed plus 1
+			pMP->mnLastFrameSeen = mCurrentFrame.mnId;// Mark the point as being observed by the current frame
+			pMP->mbTrackInView = false;// Mark the point not to be projected in the future because it has already been matched
 		    }
 		}
 	    }
@@ -1911,38 +1909,37 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	    int nToMatch=0;
 
 	    // Project points in frame and check its visibility
-// 步骤2：将所有局部MapPoints投影到当前帧，判断是否在视野范围内，然后进行投影匹配    
+	    // Step 2: Project all local MapPoints to the current frame, determine whether they are within the field of view, and then perform projection matching  
 	    for(vector<MapPoint*>::iterator vit=mvpLocalMapPoints.begin(), vend=mvpLocalMapPoints.end(); vit!=vend; vit++)
 	    {
-		MapPoint* pMP = *vit;// 局部地图的 每一个地图点   
-		// 已经被当前帧观测到MapPoint不再判断是否能被当前帧观测到
+		MapPoint* pMP = *vit;// each map point of the local map
+		// Has been observed by the current frame MapPoint no longer determines whether it can be observed by the current frame
 		if(pMP->mnLastFrameSeen == mCurrentFrame.mnId)
 		    continue;
 		if(pMP->isBad())
 		    continue;
-	// 步骤2.1：判断LocalMapPoints中的点是否在在视野内
+		// Step 2.1: Determine whether the point in LocalMapPoints is in view
 		// Project (this fills MapPoint variables for matching)
 		if(mCurrentFrame.isInFrustum(pMP,0.5))
-		{// 观测到该点的帧数加1，该MapPoint在某些帧的视野范围内
+		{// Add 1 to the number of frames in which the point was observed, and the MapPoint is within the field of view of some frames
 		    pMP->IncreaseVisible();
-		    // 只有在视野范围内的MapPoints才参与之后的投影匹配
+		    // Only MapPoints within the field of view participate in subsequent projection matching
 		    nToMatch++;
 		}
 	    }
 
 	    if(nToMatch>0)
 	    {
-		ORBmatcher matcher(0.8);// 0.8  最短的距离 和 次短的距离 比值差异
+		ORBmatcher matcher(0.8);// 0.8 Shortest distance and second shortest distance ratio difference
 		int th = 1;
 		if(mSensor==System::RGBD)
 		    th=3;
 		// If the camera has been relocalised recently, perform a coarser search
-		// 刚刚 进行过 重定位
-		 // 如果不久前进行过重定位，那么进行一个更加宽泛的搜索，阈值需要增大
+		 // If a relocation was performed not long ago, a broader search is performed and the threshold needs to be increased
 		if(mCurrentFrame.mnId < mnLastRelocFrameId+2)
 		    th=5;
-		// 步骤2.2：对视野范围内的MapPoints通过投影进行特征点匹配
-		// 在局部地图点中搜寻 和 当前帧特征点描述子 匹配的地图点  加入到 当前帧 特征点对应的地图点中
+		// Step 2.2: Match the feature points by projection to the MapPoints within the field of view
+		// Search the local map points for map points that match the feature point descriptor of the current frame and add them to the map points corresponding to the feature points of the current frame
 		matcher.SearchByProjection(mCurrentFrame,mvpLocalMapPoints,th);
 	    }
 	}
