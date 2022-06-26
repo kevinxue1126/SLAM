@@ -1058,67 +1058,67 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	    Optimizer::GlobalBundleAdjustemnt(mpMap,20);// Globally optimize the reprojection error (LM) for these two frame poses:
 	      // Note that the global optimization is used here, and the same function is used as the large loopback optimization after the loop closure detection adjustment.
 	    
-        // 【12】设置 深度中值 为 1 Set median depth to 1
-	    // 需要归一化第一帧中地图点深度的中位数；
-	    float medianDepth = pKFini->ComputeSceneMedianDepth(2);//  单目 环境 深度中值
+        // 【12】Set median depth to 1
+	    // Need to normalize the median of map point depths in the first frame;
+	    float medianDepth = pKFini->ComputeSceneMedianDepth(2);//  Monocular Environment Depth Median
 	    float invMedianDepth = 1.0f/medianDepth;
-        // 【13】检测重置  如果深度<0 或者 这时发现 优化后 第二帧追踪到的地图点<100，也需要重新初始化。
+        // [13] Detection reset If the depth is < 0 or the map points tracked in the second frame after optimization is found to be < 100, it also needs to be re-initialized.
 	    if(medianDepth<0 || pKFcur->TrackedMapPoints(1)<100 )
 	    {
-		cout << "初始化错误 重置 Wrong initialization, reseting..." << endl;
+		cout << "Wrong initialization, reseting..." << endl;
 		Reset();
 		return;
 	    }
-       // 【14】关键帧 位姿 平移量尺度归一化
-         // 否则，将深度中值作为单位一，归一化第二帧的位姿与所有的地图点。
+       // [14] keyframe pose translation scale normalization
+         // Otherwise, take the median depth as unit one, and normalize the pose of the second frame with all map points.
 	    // Scale initial baseline
-	    cv::Mat Tc2w = pKFcur->GetPose();// 位姿
-	    Tc2w.col(3).rowRange(0,3) = Tc2w.col(3).rowRange(0,3)*invMedianDepth;// 平移量归一化尺度
-	    pKFcur->SetPose(Tc2w);//设置新的位姿
+	    cv::Mat Tc2w = pKFcur->GetPose();// pose
+	    Tc2w.col(3).rowRange(0,3) = Tc2w.col(3).rowRange(0,3)*invMedianDepth;// Shift normalized scale
+	    pKFcur->SetPose(Tc2w);//set new pose
 
-        // 【15】地图点 尺度归一化 Scale points
-	    // 地图点 归一化尺度
+        // 【15】 Scale points
+	    // map point normalized scale
 	    vector<MapPoint*> vpAllMapPoints = pKFini->GetMapPointMatches();
 	    for(size_t iMP=0; iMP<vpAllMapPoints.size(); iMP++)
 	    {
 		if(vpAllMapPoints[iMP])
 		{
 		    MapPoint* pMP = vpAllMapPoints[iMP];
-		    pMP->SetWorldPos(pMP->GetWorldPos()*invMedianDepth);//地图点尺度归一化
+		    pMP->SetWorldPos(pMP->GetWorldPos()*invMedianDepth);//map point scale normalization
 		}
 	    }
-   // 【16】 对象更新
-            // 局部地图插入关键帧
+   	    // 【16】 object update
+            // Insert keyframes for local maps
 	    mpLocalMapper->InsertKeyFrame(pKFini);
 	    mpLocalMapper->InsertKeyFrame(pKFcur);
-           // 当前帧 更新位姿
+           // current frame update pose
 	    mCurrentFrame.SetPose(pKFcur->GetPose());
-	    mnLastKeyFrameId=mCurrentFrame.mnId;// 当前帧 迭代到上一帧  为下一次迭代做准备
-	    mpLastKeyFrame = pKFcur;// 指针
-           // 局部关键帧 局部地图点更新
+	    mnLastKeyFrameId=mCurrentFrame.mnId;// current frame iterate to previous frame prepare for next iteration
+	    mpLastKeyFrame = pKFcur;// pointer
+           // Local keyframes Local map point updates
 	    mvpLocalKeyFrames.push_back(pKFcur);
 	    mvpLocalKeyFrames.push_back(pKFini);
 	    mvpLocalMapPoints=mpMap->GetAllMapPoints();
-	    mpReferenceKF = pKFcur;// 参考关键帧
-	    mCurrentFrame.mpReferenceKF = pKFcur;// 当前帧的 参考帧
+	    mpReferenceKF = pKFcur;// reference keyframe
+	    mCurrentFrame.mpReferenceKF = pKFcur;// reference frame of the current frame
 
-	    mLastFrame = Frame(mCurrentFrame);// 当前帧 迭代到上一帧  为下一次迭代做准备
-           // 参考地图点
+	    mLastFrame = Frame(mCurrentFrame);// current frame iterate to previous frame prepare for next iteration
+           // reference map point
 	    mpMap->SetReferenceMapPoints(mvpLocalMapPoints);
-           // 地图显示
+           // map display
 	    mpMapDrawer->SetCurrentCameraPose(pKFcur->GetPose());
-           // 地图关键帧序列
+           // Map keyframe sequence
 	    mpMap->mvpKeyFrameOrigins.push_back(pKFini);
-	    mState=OK;// 状态 ok
+	    mState=OK;// status ok
 	}
 	
-/**
- * @brief 检查上一帧中的MapPoints是否被替换
- * 核对 替换 关键帧 地图点
- * 最后一帧 地图点 是否有替换点 有替换点的则进行替换
- * Local Mapping线程可能会将关键帧中某些MapPoints进行替换，由于tracking中需要用到mLastFrame，这里检查并更新上一帧中被替换的MapPoints
- * @see LocalMapping::SearchInNeighbors()
- */
+	/**
+	 * @brief Check if MapPoints in previous frame are replaced
+	 * Check Replace Keyframe Map Point
+	 * The last frame map point Whether there is a replacement point, if there is a replacement point, replace it
+	 * The Local Mapping thread may replace some MapPoints in the key frame. Since mLastFrame is needed in tracking, check and update the MapPoints that were replaced in the previous frame.
+	 * @see LocalMapping::SearchInNeighbors()
+	 */
 	void Tracking::CheckReplacedInLastFrame()
 	{
 	    for(int i =0; i<mLastFrame.N; i++)
@@ -1127,82 +1127,81 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 
 		if(pMP)
 		{
-		    MapPoint* pRep = pMP->GetReplaced();// 有替换点
+		    MapPoint* pRep = pMP->GetReplaced();// There are replacement points
 		    if(pRep)
 		    {
-			mLastFrame.mvpMapPoints[i] = pRep;// 进行替换
+			mLastFrame.mvpMapPoints[i] = pRep;// make a replacement
 		    }
 		}
 	    }
 	}
 
-// 跟踪参考帧  机器人没怎么移动
-// 当前帧特征点描述子 和 参考关键帧帧中的地图点 的描述子 进行 匹配
- // 保留方向直方图中最高的三个bin中 关键点 匹配的 地图点  匹配点对
-// 采用 词带向量匹配
-// 关键帧和 当前帧 均用 字典单词线性表示
-// 对应单词的 描述子 肯定比较相近 取对应单词的描述子进行匹配可以加速匹配
-// 和参考关键帧的地图点匹配  匹配点对数 需要大于15个
-// 使用 图优化 根据地图点 和 帧对应的像素点  在初始位姿的基础上 优化位姿
-// 同时剔除  外点
-// 最终超过10个 匹配点 的 返回true 跟踪成功
-/**
- * @brief 对参考关键帧的MapPoints进行跟踪
- * 
- * 1. 计算当前帧的词包，将当前帧的特征点分到特定层的nodes上
- * 2. 对属于同一node的描述子进行匹配
- * 3. 根据匹配对估计当前帧的姿态
- * 4. 根据姿态剔除误匹配
- * @return 如果匹配数大于10，返回true
- */
+// track reference frame  The robot doesn't move much
+// The feature point descriptor of the current frame is matched with the descriptor of the map point in the reference key frame frame
+ // Retain keypoint matching map point matching point pair in the highest three bins in the orientation histogram
+// using word-band vector matching
+// Both the key frame and the current frame are represented linearly by dictionary words
+// The descriptors of the corresponding words must be relatively similar. Matching the descriptors of the corresponding words can speed up the matching.
+// Match with the map points of the reference keyframe. The number of matching point pairs needs to be greater than 15
+// Use graph optimization to optimize the pose based on the initial pose according to the map points and the corresponding pixels of the frame
+// Remove outliers at the same time
+// If there are more than 10 matching points in the end, return true and the tracking is successful.
+	/**
+	 * @brief Tracking MapPoints referenced to keyframes
+	 * 
+	 * 1. Calculate the word bag of the current frame, and assign the feature points of the current frame to the nodes of a specific layer
+	 * 2. Match descriptors belonging to the same node
+	 * 3. Estimate the pose of the current frame based on the matching pair
+	 * 4. Eliminate false matches based on pose
+	 * @return Returns true if the number of matches is greater than 10
+	 */
 	bool Tracking::TrackReferenceKeyFrame()
 	{ 
 	    // Compute Bag of Words vector
-	  // 计算当前帧 特征描述子的词带向量
-	    mCurrentFrame.ComputeBoW();// 当前帧 所有特征点描述子 用字典单词线性表示
+	    mCurrentFrame.ComputeBoW();// All feature point descriptors in the current frame are linearly represented by dictionary words
 
 	    // We perform first an ORB matching with the reference keyframe
 	    // If enough matches are found we setup a PnP solver
-	    ORBmatcher matcher(0.7,true);// orb特征 匹配器   0.7 鲁棒匹配系数
+	    ORBmatcher matcher(0.7,true);// orb feature matcher 0.7 robust matching coefficient
 	    vector<MapPoint*> vpMapPointMatches;
 	    
-            // 计算 当前帧 和 参考关键帧帧之间的 特征匹配 返回匹配点对个数
-	    // 当前帧 和 参考关键帧 中的地图点  进行特征匹配  匹配到已有地图点
-	    // 当前帧每个关键点的描述子 和 参考关键帧每个地图点的描述子匹配 
-	    // 保留距离最近的匹配地图点 且最短距离和 次短距离相差不大 （ mfNNratio）
-	    // 如果需要考虑关键点的方向信息
-	    // 统计当前帧 关键点的方向 到30步长 的方向直方图
-	    // 保留方向直方图中最高的三个bin中 关键点 匹配的 地图点  匹配点对
-	    // 关键帧和 当前帧 均用 字典单词线性表示
-            // 对应单词的 描述子 肯定比较相近 取对应单词的描述子进行匹配可以加速匹配
+            // Calculate the feature matching between the current frame and the reference key frame and return the number of matching point pairs
+	    // Map points in the current frame and reference keyframes perform feature matching and match to existing map points
+	    // The descriptor of each key point of the current frame matches the descriptor of each map point of the reference key frame
+	    // Keep the closest matching map point and the shortest distance is not much different from the next shortest distance ( mfNNratio )
+	    // If you need to consider the orientation information of the key points
+	    // Count the direction histogram of the direction of the key point of the current frame to 30 steps
+	    // Retain keypoint matching map point matching point pair in the highest three bins in the orientation histogram
+	    // Both the key frame and the current frame are represented linearly by dictionary words
+            // The descriptors of the corresponding words must be relatively similar. Matching the descriptors of the corresponding words can speed up the matching.
 	    int nmatches = matcher.SearchByBoW(mpReferenceKF,mCurrentFrame,vpMapPointMatches);
 
-	    if(nmatches<15)// 和参考关键帧匹配 匹配点对数 需要大于15个
+	    if(nmatches<15)// Match with the reference key frame Match the number of point pairs Need to be greater than 15
 		return false;
 
-	    mCurrentFrame.mvpMapPoints = vpMapPointMatches;// 地图点
-	    mCurrentFrame.SetPose(mLastFrame.mTcw);// 位姿 初始为上一帧的 位姿
-	    Optimizer::PoseOptimization(&mCurrentFrame);// 优化位姿 同时标记 是否符合 变换矩阵 Rt 不符合的是外点 
-	    // 使用 图优化 根据地图点 和 帧对应的像素点  在初始位姿的基础上 优化位姿
+	    mCurrentFrame.mvpMapPoints = vpMapPointMatches;// map point
+	    mCurrentFrame.SetPose(mLastFrame.mTcw);// The pose is initially the pose of the previous frame
+	    Optimizer::PoseOptimization(&mCurrentFrame);// Optimize the pose and mark whether it conforms to the transformation matrix Rt The outliers that do not conform
+	    // Use graph optimization to optimize the pose based on the initial pose according to the map points and the corresponding pixels of the frame
 
 	    // Discard outliers
-	    // 去除外点 对应的匹配地图点  
+	    // Remove the matching map points corresponding to the outliers
 	    int nmatchesMap = 0;
-	    for(int i =0; i<mCurrentFrame.N; i++)//每个关键点
+	    for(int i =0; i<mCurrentFrame.N; i++)//every key point
 	    {
-		if(mCurrentFrame.mvpMapPoints[i])// 如果有对应 匹配到的 地图点
+		if(mCurrentFrame.mvpMapPoints[i])// If there is a corresponding matched map point
 		{
-		    if(mCurrentFrame.mvbOutlier[i])//是外点需要删除  外点 不符合变换关系的点  优化时更新
+		    if(mCurrentFrame.mvbOutlier[i])//It is an outlier that needs to be deleted Outlier Points that do not conform to the transformation relationship Update during optimization
 		    {
 			MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];
 
-			mCurrentFrame.mvpMapPoints[i]=static_cast<MapPoint*>(NULL);//删除匹配点
-			mCurrentFrame.mvbOutlier[i]=false;//无匹配地图点  外点标志 置为否
+			mCurrentFrame.mvpMapPoints[i]=static_cast<MapPoint*>(NULL);//remove matching points
+			mCurrentFrame.mvbOutlier[i]=false;//No matching map point Outer point flag Set to no
 			pMP->mbTrackInView = false;
 			pMP->mnLastFrameSeen = mCurrentFrame.mnId;
 			nmatches--;
 		    }
-		    else if(mCurrentFrame.mvpMapPoints[i]->Observations() > 0)//是内点同事 有 观测关键帧
+		    else if(mCurrentFrame.mvpMapPoints[i]->Observations() > 0)//Is the interior point colleague has the observation key frame
 			nmatchesMap++;
 		}
 	    }
