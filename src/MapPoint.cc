@@ -118,12 +118,6 @@ namespace ORB_SLAM2
 	// Update the number of times the point was observed -2 (with matching point pairs) / -1 (without matching point pairs)
 	// Update reference frame
 	// Dead point All observation frame pointers The matching point pairs related to the map point in the observation frame
-	
-	// Delete map point observation: 
-	// Delete the corresponding key frame observation relationship from the mObservation and nObs members of the current map point. 
-	// If the key frame happens to be the reference frame, it needs to be re-specified. 
-	// When the number of observation cameras is less than or equal to 2, the map point needs to be eliminated. 
-	// Deleting observation relationships and deleting map points (and replacing map points) need to be distinguished!
 	void MapPoint::EraseObservation(KeyFrame* pKF)
 	{
 	    bool bBad=false;
