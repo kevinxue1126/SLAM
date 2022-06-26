@@ -1619,33 +1619,33 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	}
 	
 	
-/**
- * @brief 更新局部关键点，called by UpdateLocalMap()
- *  更新 局部地图点
- * 局部地图点的更新比较容易，完全根据 局部关键帧来，所有 局部关键帧的地图点就构成 局部地图点
- * 局部关键帧mvpLocalKeyFrames的MapPoints，更新mvpLocalMapPoints
- */
+	/**
+	 * @brief Update local keypoints，called by UpdateLocalMap()
+	 *  Update local map point
+	 * The update of local map points is relatively easy. It is completely based on the local key frame, and all the map points of the local key frame constitute the local map point.
+	 * MapPoints of local keyframes mvpLocalKeyFrames, update mvpLocalMapPoints
+	 */
 	void Tracking::UpdateLocalPoints()
 	{
 	    mvpLocalMapPoints.clear();
 	    // vector<KeyFrame*>::const_iterator
 	    for(auto itKF=mvpLocalKeyFrames.begin(), itEndKF=mvpLocalKeyFrames.end(); itKF!=itEndKF; itKF++)
 	    {
-		KeyFrame* pKF = *itKF;// 每一个 局部关键帧
-		// 局部关键帧的地图点
+		KeyFrame* pKF = *itKF;// each local keyframe
+		// map points for local keyframes
 		const vector<MapPoint*> vpMPs = pKF->GetMapPointMatches();
-		//  每一个 局部关键帧 的地图点 
+		//  map points for each local keyframe 
 		// vector<MapPoint*>::const_iterator
 		for( auto itMP=vpMPs.begin(), itEndMP=vpMPs.end(); itMP!=itEndMP; itMP++)
 		{
-		    MapPoint* pMP = *itMP;//每一个 局部地图点 
-		    if(!pMP)// 空的点直接跳过
+		    MapPoint* pMP = *itMP;//each local map point 
+		    if(!pMP)// Empty points are skipped directly
 			continue;
-		    if(pMP->mnTrackReferenceForFrame == mCurrentFrame.mnId)// 已经更新过了
+		    if(pMP->mnTrackReferenceForFrame == mCurrentFrame.mnId)// has been updated
 			continue;
 		    if(!pMP->isBad())
 		    {
-			mvpLocalMapPoints.push_back(pMP);// 更新
+			mvpLocalMapPoints.push_back(pMP);// update
 			pMP->mnTrackReferenceForFrame = mCurrentFrame.mnId;
 		    }
 		}
