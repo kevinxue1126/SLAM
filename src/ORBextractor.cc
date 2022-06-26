@@ -87,7 +87,7 @@ namespace ORB_SLAM2
 	  return fastAtan2((float)m_01, (float)m_10);
       }
 
-// 特征计算出来，方向也计算了，那下面是计算特征描述子
+      // The feature is calculated and the direction is also calculated, then the following is the calculation feature descriptor
       const float factorPI = (float)(CV_PI/180.f);
       static void computeOrbDescriptor(const KeyPoint& kpt,
 				      const Mat& img, const Point* pattern,
@@ -130,8 +130,8 @@ namespace ORB_SLAM2
 	  #undef GET_VALUE
       }
 
-// 特征点附近区域 选取的 点对相对位置坐标  用来计算 描述子
-// 比较每个点对的灰度值的大小。如果I(pi)> I(qi)，则生成二进制串中的1，否则为0
+      // The area near the feature point, the relative position coordinates of the selected point pair are used to calculate the descriptor
+      // Compare the magnitude of the gray value of each point pair. If I(pi) > I(qi), generate 1 in binary string, otherwise 0
       static int bit_pattern_31_[256*4] =
       {
 	  8,-3, 9,5/*mean (0), correlation (0)*/,
@@ -392,70 +392,70 @@ namespace ORB_SLAM2
 	  -1,-6, 0,-11/*mean (0.127148), correlation (0.547401)*/
       };
 
-// 类构造函数  初始化函数
-// 特征点总数  尺度因子  金字塔总层数  快速角点提取阈值大 小	
-// 为了防止用默认阈值fast角点检测检测的特征数过少，
-// 添加设置min_fast_threshold最小的fast特征检测阈值，以保证检测的特征数目。
+      // class constructor
+      // The total number of feature points, the scale factor, the total number of pyramid layers, the threshold size of fast corner extraction	
+      // In order to prevent too few features detected by the default threshold fast corner detection, 
+      // add the minimum fast feature detection threshold with min_fast_threshold to ensure the number of detected features.
       ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
 	      int _iniThFAST, int _minThFAST):
 	  nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels),
 	  iniThFAST(_iniThFAST), minThFAST(_minThFAST)
       {
-	  mvScaleFactor.resize(nlevels);// 所有层的 尺度因子
+	  mvScaleFactor.resize(nlevels);// scale factor for all layers
 	  mvLevelSigma2.resize(nlevels);
-	  mvScaleFactor[0]=1.0f;// 原图 的尺度因子
-	  mvLevelSigma2[0]=1.0f;// 尺度因子的 平方
-// 【1】在构造函数中，首先先初始化每层的尺度因子 和 尺度因子平方 待用！	  
+	  mvScaleFactor[0]=1.0f;// the scale factor of the original image
+	  mvLevelSigma2[0]=1.0f;// Scale factor squared
+	  //[1] In the constructor, first, initialize the scale factor and scale factor square of each layer	  
 	  for(int i=1; i<nlevels; i++)
 	  {
-	      mvScaleFactor[i]=mvScaleFactor[i-1]*scaleFactor;// sc= Fator^c，Fator初始尺度(默认为1.2) 1  1.2   1.2*1.2 ...
-	      mvLevelSigma2[i]=mvScaleFactor[i]*mvScaleFactor[i];// 尺度因子的平方
+	      mvScaleFactor[i]=mvScaleFactor[i-1]*scaleFactor;// sc= Fator^c, Fator initial scale (default 1.2) 1 1.2 1.2*1.2 ...
+	      mvLevelSigma2[i]=mvScaleFactor[i]*mvScaleFactor[i];// Scale factor squared
 	  }
-// 【2】在构造函数中，再 初始化每层的尺度因子的 倒数 和 尺度因子平方的 倒数  
+	  // [2] In the constructor, initialize the reciprocal of the scale factor of each layer and the reciprocal of the square of the scale factor  
 	  mvInvScaleFactor.resize(nlevels);
 	  mvInvLevelSigma2.resize(nlevels);
 	  for(int i=0; i<nlevels; i++)
 	  {
-	      mvInvScaleFactor[i]=1.0f/mvScaleFactor[i];// 尺度因子倒数
-	      mvInvLevelSigma2[i]=1.0f/mvLevelSigma2[i];// 尺度因子平凡的 倒数
+	      mvInvScaleFactor[i]=1.0f/mvScaleFactor[i];// reciprocal scale factor
+	      mvInvLevelSigma2[i]=1.0f/mvLevelSigma2[i];// scale factor trivial reciprocal
 	  }
-// 【3】初始化 图像金字塔容器  以及每一层 对应 的特征点数  总数为 nfeatures
-          // 随着图像越小 越模糊 可以提取到的 特征点个数 会越来越少
+	  // [3] Initialization, image pyramid container and the number of feature points corresponding to each layer, the total number is nfeatures
+          // As the image becomes smaller and more blurred, the number of feature points that can be extracted will become less and less.
 	  mvImagePyramid.resize(nlevels);
-	  mnFeaturesPerLevel.resize(nlevels);//每一层 特征点个数 容器
+	  mnFeaturesPerLevel.resize(nlevels);//Container for the number of feature points in each layer
 	  float factor = 1.0f / scaleFactor;
-    // 接下来给每层分配待提取的特征数，具体通过等比数列求和的方式，求出每一层应该提取的特征数
-    // 等比数列 和 为 S = a1 * （1 - q^(n+1)）/（1-q）  =  nfeatures
-    // 等比数列 首相 a1 = nfeatures * (1-q) /(1-q^(n+1))
+    	  // Next, assign the number of features to be extracted to each layer. 
+	  // Specifically, the number of features that should be extracted by each layer is obtained by summing the proportional sequence.
+    	  // The proportional sequence sum is S = a1 * （1 - q^(n+1)）/（1-q）  =  nfeatures
+    	  // equivalence series prime minister a1 = nfeatures * (1-q) /(1-q^(n+1))
 	  float nDesiredFeaturesPerScale = nfeatures*(1 - factor)/(1 - (float)pow((double)factor, (double)nlevels));
-	  //初始层特征点个数  等比数列 首相
+	  // The number of feature points in the initial layer, the prime minister of the proportional sequence
 	  int sumFeatures = 0;
 	  for( int level = 0; level < nlevels-1; level++ )
 	  {
 	      mnFeaturesPerLevel[level] = cvRound(nDesiredFeaturesPerScale);
-	      sumFeatures += mnFeaturesPerLevel[level];// 前nlevels -1 层 总共的特征点数
+	      sumFeatures += mnFeaturesPerLevel[level];// The first nlevels -1 layers, the total number of feature points
 	      nDesiredFeaturesPerScale *= factor;
 	  }
-	  mnFeaturesPerLevel[nlevels-1] = std::max(nfeatures - sumFeatures, 0);//最后一层的 特征点数
-// 【4】 接下来做一些初始化，用于计算特征的方向和描述
+	  mnFeaturesPerLevel[nlevels-1] = std::max(nfeatures - sumFeatures, 0);//The number of feature points in the last layer
+	  // [4] Next, do some initialization to calculate the direction and description of the feature
 	  const int npoints = 512;
-	 // 复制训练的模板
+	  // Copy the training template
 	  const Point* pattern0 = (const Point*)bit_pattern_31_;
 	  std::copy(pattern0, pattern0 + npoints, std::back_inserter(pattern));
 
 	  //This is for orientation
 	  // pre-compute the end of a row in a circular patch
-	  //用于计算特征方向时，每个v坐标对应最大的u坐标
+	  // When used to calculate the feature direction, each v coordinate corresponds to the largest u coordinate
 	  umax.resize(HALF_PATCH_SIZE + 1);
-	  // 将v坐标划分为两部分进行计算，主要为了确保计算特征主方向的时候，x,y方向对称
+	  // The v coordinate is divided into two parts for calculation, mainly to ensure that when calculating the main direction of the feature, the x and y directions are symmetrical
 	  int v, v0, vmax = cvFloor(HALF_PATCH_SIZE * sqrt(2.f) / 2 + 1);
 	  int vmin = cvCeil(HALF_PATCH_SIZE * sqrt(2.f) / 2);
 	  const double hp2 = HALF_PATCH_SIZE*HALF_PATCH_SIZE;
 	  for (v = 0; v <= vmax; ++v)
-	      umax[v] = cvRound(sqrt(hp2 - v * v));// 通过勾股定理计算
+	      umax[v] = cvRound(sqrt(hp2 - v * v));// Calculated by the Pythagorean Theorem
 
 	  // Make sure we are symmetric
-	  // 确保对称，即保证是一个圆
 	  for (v = HALF_PATCH_SIZE, v0 = 0; v >= vmin; --v)
 	  {
 	      while (umax[v0] == umax[v0 + 1])
@@ -465,7 +465,7 @@ namespace ORB_SLAM2
 	  }
       }
 
-  // 计算特征方向是为了保证特征具有旋转不变的特性。  
+      // The calculation of the feature orientation is to ensure that the feature has the characteristics of rotation invariance
       static void computeOrientation(const Mat& image, vector<KeyPoint>& keypoints, const vector<int>& umax)
       {
 	  for (vector<KeyPoint>::iterator keypoint = keypoints.begin(),
@@ -534,18 +534,18 @@ namespace ORB_SLAM2
       }
       
       
- //  将特征点进行  八叉树划分
- // 接下来就是将图像划分成八叉树形式，根据这一层的特征数 N 确定八叉树的节点，
-// 将这一层图像检测到的特征划分到这些节点，保证每个节点里面有一个特征。
+       //  Divide feature points into octree
+      // The next step is to divide the image into an octree form, determine the nodes of the octree according to the feature number N of this layer, 
+      // and divide the features detected by this layer of images into these nodes to ensure that there is a feature in each node.
       vector<cv::KeyPoint> ORBextractor::DistributeOctTree(const vector<cv::KeyPoint>& vToDistributeKeys, const int &minX,
 					    const int &maxX, const int &minY, const int &maxY, const int &N, const int &level)
       {
 	  // Compute how many initial nodes   
- // 【1】计算初始时有几个节点
+ 	  // [1] There are several nodes at the beginning of the calculation
 	  const int nIni = round(static_cast<float>(maxX-minX)/(maxY-minY));
- // 【2】得到节点之间的间隔
+ 	  // [2] Get the interval between nodes
 	  const float hX = static_cast<float>(maxX-minX)/nIni;
-//  【3】划分之后包含的节点
+	  // [3] Nodes included after division
 	  list<ExtractorNode> lNodes;
 	  vector<ExtractorNode*> vpIniNodes;
 	  vpIniNodes.resize(nIni);
@@ -562,7 +562,7 @@ namespace ORB_SLAM2
 	      lNodes.push_back(ni);
 	      vpIniNodes[i] = &lNodes.back();
 	  }
-// 【4】将点分配给子节点
+	  // [4] Assign points to child nodes
 	  //Associate points to childs
 	  for(size_t i=0;i<vToDistributeKeys.size();i++)
 	  {
@@ -574,7 +574,7 @@ namespace ORB_SLAM2
 
 	  while(lit!=lNodes.end())
 	  {
-	    // 如果只含一个特征点的时候，则不再划分
+	    	    // If there is only one feature point, it is no longer divided
 		    if(lit->vKeys.size()==1)
 		    {
 			lit->bNoMore=true;
@@ -589,19 +589,19 @@ namespace ORB_SLAM2
 	  bool bFinish = false;
 
 	  int iteration = 0;
-         //节点及对应包含的特征数
+          // Nodes and the corresponding number of features included
 	  vector<pair<int,ExtractorNode*> > vSizeAndPointerToNode;
 	  vSizeAndPointerToNode.reserve(lNodes.size()*4);
 
 	  while(!bFinish)
 	  {
 	      iteration++;
-	      // 初始节点个数，用于判断是否节点再一次进行了划分
+	      // The initial number of nodes, used to determine whether the nodes are divided again
 	      int prevSize = lNodes.size();
 
 	      lit = lNodes.begin();
 
-	      int nToExpand = 0;// 表示节点分解次数
+	      int nToExpand = 0;// Indicates the number of node decompositions
 
 	      vSizeAndPointerToNode.clear();
 
@@ -764,19 +764,20 @@ namespace ORB_SLAM2
 	  return vResultKeys;
       }
       
-// 通过八叉树的方式计算特征点
-// 主要就是划分格子，在不同的尺度下，每个格子进行Fast特征检测，
-// 接下来就是将图像划分成八叉树形式，根据这一层的特征数确定八叉树的节点，
-// 将这一层图像检测到的特征划分到这些节点，保证每个节点里面有一个特征。
+       // Calculate feature points by octree
+       // The main thing is to divide the grid. 
+       // At different scales, each grid is subjected to Fast feature detection. 
+       // The next step is to divide the image into octree form, and determine the nodes of the octree according to the number of features of this layer. 
+       // The detected features are divided into these nodes to ensure that there is one feature in each node.
       void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoints)
       {
-	  allKeypoints.resize(nlevels);// 容器 容器  每一层级 产生的 特征点
+	  allKeypoints.resize(nlevels);// Container   feature points generated at each level
 
-	  const float W = 30;// 设置格子大小
+	  const float W = 30;// set grid size
 
-	  for (int level = 0; level < nlevels; ++level)//  每一层级 
+	  for (int level = 0; level < nlevels; ++level)//  each level
 	  {
-	//【1】 得到每一层图像进行特征检测区域上下两个坐标
+	      //[1] Obtain the upper and lower coordinates of each layer of image for feature detection area
 	      const int minBorderX = EDGE_THRESHOLD-3;
 	      const int minBorderY = minBorderX;
 	      const int maxBorderX = mvImagePyramid[level].cols-EDGE_THRESHOLD+3;
@@ -784,30 +785,30 @@ namespace ORB_SLAM2
 	      const float width = (maxBorderX-minBorderX);
 	      const float height = (maxBorderY-minBorderY);
 	      
-	// 【2】 用于分配的关键点
+	      // [2] Key points for assignment
 	      vector<cv::KeyPoint> vToDistributeKeys;
 	      vToDistributeKeys.reserve(nfeatures*10);
 	
-        // 【3】将待检测区域划分为格子的行列数
-	      const int nCols = width/W;// 格子数量
+              // [3] Divide the area to be detected into the number of rows and columns of the grid
+	      const int nCols = width/W;// Number of grids
 	      const int nRows = height/W;
-	      // 重新计算每个格子的大小
-	      const int wCell = ceil(width/nCols);//每个格子 像素 大小
+	      // Recalculate the size of each grid
+	      const int wCell = ceil(width/nCols);//The size of each grid pixel
 	      const int hCell = ceil(height/nRows);
 
-	      for(int i=0; i<nRows; i++)// 行上 每个格子
+	      for(int i=0; i<nRows; i++)// each cell on the row
 	      {
-		  const float iniY =minBorderY+i*hCell;// 行上 每个格子像素范围
+		  const float iniY =minBorderY+i*hCell;// The range of pixels per grid on the row
 		  float maxY = iniY+hCell+6;
 
 		  if(iniY >= maxBorderY-3)
 		      continue;
 		  if(maxY>maxBorderY)
 		      maxY = maxBorderY;
-          // 【4】 在每个格子内进行fast特征检测
-		  for(int j=0; j<nCols; j++)//列上 每个格子
+          	   // [4] Fast feature detection in each grid
+		  for(int j=0; j<nCols; j++)//each cell in the column
 		  {
-		      const float iniX =minBorderX+j*wCell;// 列上每个格子像素范围
+		      const float iniX =minBorderX+j*wCell;// The range of pixels per grid on the column
 		      float maxX = iniX+wCell+6;
 		      if(iniX>=maxBorderX-6)
 			  continue;
@@ -816,14 +817,14 @@ namespace ORB_SLAM2
 
 		      vector<cv::KeyPoint> vKeysCell;
 		      FAST(mvImagePyramid[level].rowRange(iniY,maxY).colRange(iniX,maxX),
-			  vKeysCell,iniThFAST,true);// 按大阈值提取 fast 角点
-	    // 【5】如果检测到的fast特征为空，则降低阈值再进行检测
-		      if(vKeysCell.empty())// 如果提取的角点数量少
+			  vKeysCell,iniThFAST,true);// Extract fast corners by large threshold
+	    	      // [5] If the detected fast feature is empty, lower the threshold and then perform the detection
+		      if(vKeysCell.empty())// If the number of extracted corner points is small
 		      {
 			  FAST(mvImagePyramid[level].rowRange(iniY,maxY).colRange(iniX,maxX),
-			      vKeysCell,minThFAST,true);// 按小阈值 提取
+			      vKeysCell,minThFAST,true);// Extract by small threshold
 		      }
-             // 【6】 计算实际特征点的位置
+             	       // [6] Calculate the position of the actual feature point
 		      if(!vKeysCell.empty())// 提取到角点了
 		      {//vector<cv::KeyPoint>::iterator
 			  for( auto vit=vKeysCell.begin(); vit!=vKeysCell.end();vit++)
