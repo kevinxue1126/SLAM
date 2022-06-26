@@ -731,51 +731,49 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
                     // Display the current camera pose
 		    mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
 
-               // b. 清除 UpdateLastFrame 中为当前帧 临时添加的 MapPoints	    
-                    // 当前帧 的地图点的 观测帧数量小于1 的化 清掉 相应的 地图点
+               // b. Clear the MapPoints temporarily added for the current frame in Update LastFrame    
+                    // If the number of observation frames of the map point of the current frame is less than 1, the corresponding map point will be cleared.
 		    for(int i=0; i< mCurrentFrame.N; i++)
 		    {
-			MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];//当前帧 匹配到的地图点
-			if(pMP)//指针存在
-			    if(pMP->Observations()<1)// 其观测帧 小于 1
-			    {// 排除UpdateLastFrame函数中为了跟踪增加的MapPoints
-				mCurrentFrame.mvbOutlier[i] = false;// 外点标志 0 
-				mCurrentFrame.mvpMapPoints[i]=static_cast<MapPoint*>(NULL);// 清掉 相应的 地图点
+			MapPoint* pMP = mCurrentFrame.mvpMapPoints[i];//The current frame matches the map point
+			if(pMP)//pointer exists
+			    if(pMP->Observations()<1)// Its observation frame is less than 1
+			    {// Exclude MapPoints added for tracking in UpdateLastFrame function
+				mCurrentFrame.mvbOutlier[i] = false;// Outer Point Flag 0
+				mCurrentFrame.mvpMapPoints[i]=static_cast<MapPoint*>(NULL);//Clear the corresponding map point
 			    }
 		    }
-               // c. 清除临时的MapPoints,删除临时的地图点
-                  // 这些MapPoints在TrackWithMotionModel的UpdateLastFrame函数里生成（仅双目和rgbd）
-		  // b 中只是在 当前帧 中将这些MapPoints剔除，这里从MapPoints数据库中删除
-		  // 这里生成的仅仅是为了提高双目或rgbd摄像头的帧间跟踪效果，用完以后就扔了，没有添加到地图中
+               // c. Clear temporary MapPoints, delete temporary map points
+                  // These MapPoints are generated in the UpdateLastFrame function of TrackWithMotionModel (only binocular and rgbd)
+		  // In b, these MapPoints are only culled in the current frame, here they are deleted from the MapPoints database
+		  // What is generated here is only to improve the frame-to-frame tracking effect of the binocular or rgbd camera. It will be thrown away after use and not added to the map.
 		    //  list<MapPoint*>::iterator 
 		    for(auto lit = mlpTemporalPoints.begin(), lend =  mlpTemporalPoints.end(); lit != lend; lit++)
 		    {
 			MapPoint* pMP = *lit;
-			delete pMP;// 删除地图点 对应的 空间
+			delete pMP;// Delete the space corresponding to the map point
 		    }
 		    mlpTemporalPoints.clear();
 
-	      // d. 判断是否需要新建关键帧
-		   // 最后一步是确定是否将当前帧定为关键帧，由于在Local Mapping中，
-		   // 会剔除冗余关键帧，所以我们要尽快插入新的关键帧，这样才能更鲁棒。
+	      // d. Determine whether a new keyframe needs to be created
+		   // The last step is to determine whether to set the current frame as a keyframe. 
+	          // Since redundant keyframes will be eliminated in Local Mapping, we need to insert new keyframes as soon as possible, so as to be more robust.
 		    if(NeedNewKeyFrame())
 			CreateNewKeyFrame();
 
-	      // e. 外点清除 检查外点 标记(不符合 变换矩阵的 点 优化时更新)   
+	      	    // e. Outlier Clear Check Outlier Flags (updated when points that do not conform to transformation matrix are optimized) 
 		    for(int i=0; i<mCurrentFrame.N;i++)
 		    {
 			if(mCurrentFrame.mvpMapPoints[i] && mCurrentFrame.mvbOutlier[i])
 			    mCurrentFrame.mvpMapPoints[i]=static_cast<MapPoint*>(NULL);
 		    }
 		}
-		
-      // 3. 跟踪失败后的处理（两两跟踪失败 or 局部地图跟踪失败）======================================================
-
+      		// 3. Processing after tracking failure (two-by-two tracking failure or partial map tracking failure)
 		if(mState == LOST)
 		{
-		    if(mpMap->KeyFramesInMap()<=5)// 关键帧数量过少（刚开始建图） 直接退出
+		    if(mpMap->KeyFramesInMap()<=5)// The number of keyframes is too small (just starting to build a map) Exit directly
 		    {
-			cout << "跟踪丢失， 正在重置 Track lost soon after initialisation, reseting..." << endl;
+			cout << "Track lost soon after initialisation, reseting..." << endl;
 			mpSystem->Reset();
 			return;
 		    }
@@ -784,12 +782,12 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 		if(!mCurrentFrame.mpReferenceKF)
 		    mCurrentFrame.mpReferenceKF = mpReferenceKF;
 
-		mLastFrame = Frame(mCurrentFrame);//新建关键帧
+		mLastFrame = Frame(mCurrentFrame);//New keyframe
 	    }
 
    
-// 步骤3: 返回跟踪得到的位姿 信息=======================================================================
-            // 计算参考帧到当前帧 的变换 Tcr = mTcw  * mTwr 
+	    // Step 3: Return the tracked pose information=======================================================================
+            // Calculate the transformation from the reference frame to the current frame Tcr = mTcw  * mTwr 
 	    if(!mCurrentFrame.mTcw.empty())
 	    {
 	        // mTcw  * mTwr  = mTcr
@@ -799,7 +797,7 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 		mlFrameTimes.push_back(mCurrentFrame.mTimeStamp);
 		mlbLost.push_back(mState==LOST);
 	    }
-	    else//跟踪丢失 会造成  位姿为空 
+	    else//Loss of tracking results in empty pose
 	    {
 		// This can happen if tracking is lost
 		mlRelativeFramePoses.push_back(mlRelativeFramePoses.back());
@@ -809,156 +807,148 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 	    }
 
   }
-// 以上为 Tracking部分
 	
 
-// 当前帧 特征点个数 大于500 进行初始化
-// 设置第一帧为关键帧  位姿为 [I 0] 
-// 根据第一帧视差求得的深度 计算3D点
-// 生成地图 添加地图点 地图点观测帧 地图点最好的描述子 更新地图点的方向和距离 
-// 关键帧的地图点 当前帧添加地图点  地图添加地图点
-// 显示地图
 
-/**
- * @brief 双目和rgbd的地图初始化
- *
- * 由于具有深度信息，直接生成MapPoints
- */
-// 第一帧 双目 / 深度初始化 
+
+	/**
+	 * @brief Map initialization for binocular and rgbd
+	 *
+	 * Directly generate MapPoints due to depth information
+	 */
+	// First frame binocular/depth initialization
 	void Tracking::StereoInitialization()
 	{
 	    if(mCurrentFrame.N>500)
-  // 【0】找到的关键点个数 大于 500 时进行初始化将当前帧构建为第一个关键帧
+  	    // [0] When the number of key points found is greater than 500, initialize and build the current frame as the first key frame
 	    {
 		// Set Frame pose to the origin
-       //【1】 初始化 第一帧为世界坐标系原点 变换矩阵 对角单位阵 R = eye(3,3)   t=zero(3,1)
-// 步骤1：设定初始位姿
+       		//【1】 Initialization The first frame is the origin of the world coordinate system Transformation matrix Diagonal unit matrix R = eye(3,3) t=zero(3,1)
+		// Step 1: Set the initial pose
 		mCurrentFrame.SetPose(cv::Mat::eye(4,4,CV_32F));
 
-       // 【2】创建第一帧为关键帧  Create KeyFrame  普通帧      地图       关键帧数据库
-		// 加入地图 加入关键帧数据库
-// 步骤2：将当前帧构造为初始关键帧
-		// mCurrentFrame的数据类型为Frame
-		// KeyFrame包含Frame、地图3D点、以及BoW
-		// KeyFrame里有一个mpMap，Tracking里有一个mpMap，而KeyFrame里的mpMap都指向Tracking里的这个mpMap
-		// KeyFrame里有一个mpKeyFrameDB，Tracking里有一个mpKeyFrameDB，而KeyFrame里的mpMap都指向Tracking里的这个mpKeyFrameDB
+       		// [2] Create the first frame as a key frame Create KeyFrame normal frame map key frame database
+		// Add map Add keyframe database
+		// Step 2: Construct the current frame as the initial keyframe
+		// The data type of mCurrentFrame is Frame
+		// KeyFrame contains Frame, map 3D points, and BoW
+		// There is an mpMap in KeyFrame, an mpMap in Tracking, and the mpMap in KeyFrame all point to this mpMap in Tracking
+		// There is an mpKeyFrameDB in KeyFrame, an mpKeyFrameDB in Tracking, and mpMap in KeyFrame all point to this mpKeyFrameDB in Tracking
 		KeyFrame* pKFini = new KeyFrame(mCurrentFrame,mpMap,mpKeyFrameDB);
-		// 地图添加第一帧关键帧 关键帧存入地图关键帧set集合里 Insert KeyFrame in the map
-      
-		// KeyFrame中包含了地图、反过来地图中也包含了KeyFrame，相互包含
-// 步骤3：在地图中添加该初始关键帧
-		mpMap->AddKeyFrame(pKFini);// 地图添加 关键帧
+		// nsert KeyFrame in the map
+		// The KeyFrame contains the map, and in turn the map also contains the KeyFrame, which contains each other
+		// Step 3: Add this initial keyframe to the map
+		mpMap->AddKeyFrame(pKFini);// Add keyframes to the map
 
 		// Create MapPoints and asscoiate to KeyFrame
-                // 【3】创建地图点 并关联到 相应的关键帧  关键帧也添加地图点  地图添加地图点 地图点描述子 距离
-// 步骤4：为每个特征点构造MapPoint		
-		for(int i=0; i<mCurrentFrame.N;i++)// 该帧的每一个关键点
+                // [3] Create a map point and associate it with the corresponding keyframe. The keyframe also adds a map point. The map adds a map point. The map point descriptor distance
+		// Step 4: Construct MapPoint for each feature point	
+		for(int i=0; i<mCurrentFrame.N;i++)// each key point of the frame
 		{
-		    float z = mCurrentFrame.mvDepth[i];// 关键点对应的深度值  双目和 深度相机有深度值
-		    if(z>0)// 有效深度 
+		    float z = mCurrentFrame.mvDepth[i];// Depth values corresponding to keypoints Binocular and depth cameras have depth values
+		    if(z>0)// effective depth 
 		    {
-		   // 步骤4.1：通过反投影得到该特征点的3D坐标  
-			cv::Mat x3D = mCurrentFrame.UnprojectStereo(i);// 投影到 在世界坐标系下的三维点坐标
-		   // 步骤4.2：将3D点构造为MapPoint	
-			// 每个 具有有效深度 关键点 对应的3d点 转换到 地图点对象
+		   	// Step 4.1: Obtain the 3D coordinates of the feature point through back projection
+			cv::Mat x3D = mCurrentFrame.UnprojectStereo(i);// Projected to 3D point coordinates in the world coordinate system
+		   	// Step 4.2: Construct 3D Points as MapPoints	
+			// Each 3d point corresponding to a keypoint with a valid depth is converted to a map point object
 			MapPoint* pNewMP = new MapPoint(x3D,pKFini,mpMap);
-		  // 步骤4.3：为该MapPoint添加属性：
-			// a.观测到该MapPoint的关键帧
-			// b.该MapPoint的描述子
-			// c.该MapPoint的平均观测方向和深度范围
+		  	// Step 4.3: Add properties to this MapPoint:
+			// a. Observe the key frame of the MapPoint
+			// b. Descriptor of the MapPoint
+			// c. The average observation direction and depth range of the MapPoint
 			
-                         // a.表示该MapPoint可以被哪个KeyFrame的哪个特征点观测到
-			pNewMP->AddObservation(pKFini,i);// 地图点添加 观测 参考帧 在该帧上可一观测到此地图点
-			 // b.从众多观测到该MapPoint的特征点中挑选区分读最高的描述子
-			pNewMP->ComputeDistinctiveDescriptors();// 地图点计算最好的 描述子
-			// c.更新该MapPoint平均观测方向以及观测距离的范围
-			// 该地图点平均观测方向与观测距离的范围，这些都是为了后面做描述子融合做准备。
+                         // a. Indicates which feature point of which KeyFrame the MapPoint can be observed by
+			pNewMP->AddObservation(pKFini,i);// Add map point Observation Reference frame This map point can be observed on this frame
+			 // b. Select the descriptor with the highest discriminating read from the feature points that observe the MapPoint
+			pNewMP->ComputeDistinctiveDescriptors();// Map point to calculate the best descriptor
+			// c. Update the average observation direction of the MapPoint and the range of the observation distance
+			// The average observation direction and the range of the observation distance of the map point are all preparations for the subsequent descriptor fusion.
 			pNewMP->UpdateNormalAndDepth();
-			// 更新 相对 帧相机中心 单位化相对坐标  金字塔层级 距离相机中心距离
-		   // 步骤4.4：在地图中添加该MapPoint
-			mpMap->AddMapPoint(pNewMP);// 地图 添加 地图点
-                   // 步骤4.5：表示该KeyFrame的哪个特征点可以观测到哪个3D点
+			// update relative frame camera center normalized relative coordinates pyramid level distance from camera center
+		   	// Step 4.4: Add the MapPoint to the map
+			mpMap->AddMapPoint(pNewMP);// map add map point
+                   	// Step 4.5: Indicate which feature point of the KeyFrame can observe which 3D point
 			 pKFini->AddMapPoint(pNewMP,i);
-		   // 步骤4.6：将该MapPoint添加到当前帧的mvpMapPoints中
-                        // 为当前Frame的特征点与MapPoint之间建立索引
-			mCurrentFrame.mvpMapPoints[i]=pNewMP;//当前帧 添加地图点
+		   	// Step 4.6: Add this MapPoint to mvpMapPoints of the current frame
+                        // Create an index between the feature points of the current Frame and MapPoint
+			mCurrentFrame.mvpMapPoints[i]=pNewMP;//current frame add map point
 		    }
 		}
-		cout << "新地图创建成功 new map ,具有 地图点数 : " << mpMap->MapPointsInMap() << "  地图点 points" << endl;
- // 步骤5：在局部地图中添加该初始关键帧
-		// 【4】局部建图添加关键帧  局部关键帧添加关键帧     局部地图点添加所有地图点
+		cout << "new map , : " << mpMap->MapPointsInMap() << " points" << endl;
+ 		// Step 5: Add this initial keyframe to the local map
+		// [4] Add keyframes to local mapping Add keyframes to local keyframes Add all map points to local map points
 		mpLocalMapper->InsertKeyFrame(pKFini);
-               // 记录
-		mLastFrame = Frame(mCurrentFrame);// 上一个 普通帧
+               // Record
+		mLastFrame = Frame(mCurrentFrame);// previous normal frame
 		mnLastKeyFrameId=mCurrentFrame.mnId;// id
-	 	mpLastKeyFrame = pKFini;// 上一个关键帧
-               // 局部
-		mvpLocalKeyFrames.push_back(pKFini);// 局部关键帧 添加 关键帧
-		mvpLocalMapPoints=mpMap->GetAllMapPoints();//局部地图点  添加所有地图点
-		mpReferenceKF = pKFini;// 参考帧
-		mCurrentFrame.mpReferenceKF = pKFini;//当前帧 参考关键帧
-                // 地图
-		mpMap->SetReferenceMapPoints(mvpLocalMapPoints);//地图 参考地图点
-		mpMap->mvpKeyFrameOrigins.push_back(pKFini);// 地图关键帧
-                // 可视化
+	 	mpLastKeyFrame = pKFini;// previous keyframe
+               // local
+		mvpLocalKeyFrames.push_back(pKFini);// local keyframes add keyframes
+		mvpLocalMapPoints=mpMap->GetAllMapPoints();//Local map points Add all map points
+		mpReferenceKF = pKFini;// reference frame
+		mCurrentFrame.mpReferenceKF = pKFini;//current frame reference key frame
+                // map
+		mpMap->SetReferenceMapPoints(mvpLocalMapPoints);//map reference map point
+		mpMap->mvpKeyFrameOrigins.push_back(pKFini);// map keyframe
+                // visualization
 		mpMapDrawer->SetCurrentCameraPose(mCurrentFrame.mTcw);
-		mState=OK;// 跟踪正常
+		mState=OK;// tracking is normal
 	    }
 	}
 
 
-/**
- * @brief 单目的地图初始化    第一帧 单目初始化	
- *单目的初始化有专门的初始化器，只有连续的两帧特征点 均>100 个才能够成功构建初始化器
- * 并行地计算基础矩阵和单应性矩阵，选取其中一个模型，恢复出最开始两帧之间的相对姿态以及点云
- * 得到初始两帧的匹配、相对运动、初始MapPoints
- */
+	/**
+	 * @brief Monocular Initialization First Frame Monocular Initialization
+	 * There is a special initializer for single-purpose initialization, and the initializer can be successfully constructed only if there are more than 100 feature points in two consecutive frames.
+	 * Calculate the fundamental matrix and the homography matrix in parallel, select one of the models, 
+	 * recover the relative pose and point cloud between the first two frames, and obtain the matching, relative motion, and initial MapPoints of the initial two frames.
+	 */
 	void Tracking::MonocularInitialization()
 	{
-// 【1】添加第一帧 设置参考帧
-	    if(!mpInitializer)// 未初始化成功 进行初始化 Initializer  得到  R  t 和 3D点
+	    // 【1】Add the first frame and set the reference frame
+	    if(!mpInitializer)// Not initialized successfully Initialize Initializer to get R t and 3D points
 	    {
-		// 设置参考帧   用作匹配的帧 Set Reference Frame
-		if(mCurrentFrame.mvKeys.size()>100)// 关键点个数超过 100个 才进行初始化
+		// Set Reference Frame
+		if(mCurrentFrame.mvKeys.size()>100)// Initialize only when the number of key points exceeds 100
 		{
-		    mInitialFrame = Frame(mCurrentFrame);// 初始帧
-		    mLastFrame = Frame(mCurrentFrame);// 上一帧
-		    mvbPrevMatched.resize(mCurrentFrame.mvKeysUn.size());// 是第一帧中的所有特征点
+		    mInitialFrame = Frame(mCurrentFrame);// initial frame
+		    mLastFrame = Frame(mCurrentFrame);// previous frame
+		    mvbPrevMatched.resize(mCurrentFrame.mvKeysUn.size());// are all feature points in the first frame
 		    for(size_t i=0; i<mCurrentFrame.mvKeysUn.size(); i++)
-			mvbPrevMatched[i]=mCurrentFrame.mvKeysUn[i].pt;//匹配点横坐标
+			mvbPrevMatched[i]=mCurrentFrame.mvKeysUn[i].pt;//Match point abscissa
 			
-                    // 这两句是多余的
 		   if(mpInitializer)
 			delete mpInitializer;
 		    
-                    // 再次初始化
-		    mpInitializer =  new Initializer(mCurrentFrame,1.0,200);// 方差 和 迭代次数
+                    // initialize again
+		    mpInitializer =  new Initializer(mCurrentFrame,1.0,200);// variance and iterations
 		    fill(mvIniMatches.begin(),mvIniMatches.end(),-1);
 		    return;
 		}
 	    }
-// 【2】添加第二帧 参考帧设置完成后 根据  当前帧关键点数量选择是否初始化
-	    else// 第一帧初始化成功   当前帧和参考帧 做匹配得到 R t
+	    // 【2】Add the second frame After the reference frame setting is completed, select whether to initialize according to the number of key points in the current frame
+	    else// The first frame is initialized successfully. The current frame and the reference frame are matched to get R t
 	    {
 		// Try to initialize
-     //【3】重新初始化 设置参考帧     
-		if((int)mCurrentFrame.mvKeys.size()<=100)//只有连续的两帧特征点 均>100 个才能够成功构建初始化器
+     		//【3】Reinitialize Set the reference frame    
+		if((int)mCurrentFrame.mvKeys.size()<=100)//The initializer can be successfully constructed only if there are more than 100 feature points in two consecutive frames
 		{
 		    delete mpInitializer;
-		    mpInitializer = static_cast<Initializer*>(NULL);// 重新初始化
+		    mpInitializer = static_cast<Initializer*>(NULL);// reinitialize
 		    fill(mvIniMatches.begin(),mvIniMatches.end(),-1);
 		    return;
 		}
-    // 【4】当前帧特征点数较多 和参考帧寻找匹配点对 根据匹配点对数 确定是否 初始化
-		//  寻找匹配点对   mvIniMatches
+    		// [4] There are many feature points in the current frame, and the reference frame is used to find matching point pairs. Determine whether to initialize according to the number of matching point pairs.
+		//  Find matching point pairs mvIniMatches
 		ORBmatcher matcher(0.9,true);
-		// mInitialFrame 第一帧  mCurrentFrame当前帧第二帧 
-		// mvbPreMatched是第一帧中的所有特征点；
-		// mvIniMatches标记匹配状态，未匹配上的标为-1；
-		//如果返回nmatches<100,初始化失败，重新初始化过程
-		// 100 块匹配 搜索窗口大小尺寸
+		// mInitialFrame first frame  mCurrentFrame current frame second frame
+		// mvbPreMatched is all feature points in the first frame;
+		// mvIniMatches marks the matching state, and the unmatched mark is -1;
+		// If nmatches<100 is returned, the initialization fails, and the initialization process is re-initialized
+		// 100 block matches Search window size
 		int nmatches = matcher.SearchForInitialization(mInitialFrame,mCurrentFrame,mvbPrevMatched,mvIniMatches,100);
-     //【5】 匹配点对过少 重新初始化 Check if there are enough correspondences
+     		//【5】 Check if there are enough correspondences
 		if(nmatches<100)
 		{
 		    delete mpInitializer;
@@ -966,108 +956,107 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 		    return;
 		}
                
-        // 【6】匹配点对数量 较多进行初始化 计算相机的移动位姿 根据 基础矩阵 F 或者 单应矩阵 H 计算初始 R t
-		cv::Mat Rcw; //当前相机 旋转矩阵 Current Camera Rotation
-		cv::Mat tcw; // 平移矩阵 Current Camera Translation
-		vector<bool> vbTriangulated; // 符合变换矩阵的内点 且三角化后3D三维坐标正常的点 标志
+        	// [6] Initialize a large number of matching point pairs Calculate the moving pose of the camera Calculate the initial R t according to the fundamental matrix F or the homography matrix H
+		cv::Mat Rcw; // Current Camera Rotation
+		cv::Mat tcw; // Current Camera Translation
+		vector<bool> vbTriangulated; // Points that conform to the interior points of the transformation matrix and that have normal 3D coordinates after triangulation
 		// Triangulated Correspondences (mvIniMatches)	
- // * 单目相机初始化
-//* 用于平面场景的单应性矩阵H(8中运动假设) 和用于非平面场景的基础矩阵F(4种运动假设)
-//* 然后通过一个评分规则来选择合适的模型，恢复相机的旋转矩阵R和平移向量t 和 对应的3D点(尺度问题)  好坏点标志
-  // 	并行计算分解基础矩阵和单应矩阵（获取的点恰好位于同一个平面），得到帧间运动（位姿），vbTriangulated标记一组特征点能否进行三角化。
-  // mvIniP3D 是cv::Point3f类型的一个容器，是个存放三角化得到的 3D点 的 临时变量。
+ 		// * Monocular camera initialization
+		//* Homography matrix H for planar scenes (8 motion hypotheses) and fundamental matrix F for non-planar scenes (4 motion hypotheses)
+		//* Then select a suitable model through a scoring rule, restore the camera's rotation matrix R and translation vector t and the corresponding 3D point (scale problem) Good or bad point mark
+  		// Parallel computing decomposes the fundamental matrix and the homography matrix (the acquired points are exactly in the same plane) to obtain the motion (pose) between frames, and vbTriangulated marks whether a set of feature points can be triangulated.
+  		// mvIniP3D is a container of type cv::Point3f, which is a temporary variable that stores the 3D points obtained by triangulation.
  
 		if(mpInitializer->Initialize(mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated))
-	     // 最关键算法是通过初始连续两帧的对极约束恢复出相机姿态和地图点 
+	     	// The most critical algorithm is to recover the camera pose and map points through the epipolar constraints of the initial two consecutive frames
 		{
 		    for(size_t i=0, iend=mvIniMatches.size(); i<iend;i++)
 		    {
-			if(mvIniMatches[i]>=0 && !vbTriangulated[i])// 是匹配点 但是 匹配点 不在求出的变换上
+			if(mvIniMatches[i]>=0 && !vbTriangulated[i])// is the matching point but the matching point is not on the transformation being calculated
 			{
-			    mvIniMatches[i]=-1;//此匹配点不好
-			    nmatches--;//匹配点对数 - 1
+			    mvIniMatches[i]=-1;//This match point is not good
+			    nmatches--;//Match point pairs - 1
 			}
 		    }
 
-	 // 【7】设置初始参考帧的世界坐标位姿态  对角矩阵  Set Frame Poses
+	 	    // [7] Set the world coordinate position and posture of the initial reference frame Diagonal matrix
 		    mInitialFrame.SetPose(cv::Mat::eye(4,4,CV_32F));
-	// 【8】设置第二帧(当前帧)的位姿	    
+		    // 【8】Set the pose of the second frame (current frame)    
 		    cv::Mat Tcw = cv::Mat::eye(4,4,CV_32F);
 		    Rcw.copyTo(Tcw.rowRange(0,3).colRange(0,3));
 		    tcw.copyTo(Tcw.rowRange(0,3).col(3));		    
 		    mCurrentFrame.SetPose(Tcw);
-        // 【9】创建地图 使用 最小化重投影误差BA 进行 地图优化 优化位姿 和地图点
+        	    // [9] Create a map and use Minimize reprojection error BA for map optimization to optimize pose and map points
 		    CreateInitialMapMonocular();
 		}
 	    }
 	}
 
 
- /**
- * @brief CreateInitialMapMonocular
- * 初始帧设置为世界坐标系原点 初始化后 解出来的 当前帧位姿T 最小化重投影误差  BA 全局优化位姿 T
- * 为单目摄像头三角化生成MapPoints
- */
+	 /**
+	 * @brief CreateInitialMapMonocular
+	 * The initial frame is set as the origin of the world coordinate system. 
+	 * After initialization, the solved current frame pose T Minimizes the reprojection error BA Globally optimizes the pose T generates MapPoints for the triangulation of the monocular camera
+	 */
 	void Tracking::CreateInitialMapMonocular()
 	{
-  //【1】创建关键帧 Create KeyFrames
-      // 构建初始地图就是将这两关键帧以及对应的地图点加入地图（mpMap）中，需要分别构造关键帧以及地图点
-	    KeyFrame* pKFini = new KeyFrame(mInitialFrame,mpMap,mpKeyFrameDB);// 初始关键帧 加入地图 加入关键帧数据库
-	    KeyFrame* pKFcur = new KeyFrame(mCurrentFrame,mpMap,mpKeyFrameDB);//当前关键帧 第二帧
-  //【2】计算帧 描述子 在 描述子词典 中的 线性表示向量
+  	    //【1】Create KeyFrames
+            // The construction of the initial map is to add these two key frames and the corresponding map points to the map (mpMap), and it is necessary to construct the key frames and map points respectively.
+	    KeyFrame* pKFini = new KeyFrame(mInitialFrame,mpMap,mpKeyFrameDB);// Initial keyframe Add map Add keyframe database
+	    KeyFrame* pKFcur = new KeyFrame(mCurrentFrame,mpMap,mpKeyFrameDB);// current keyframe second frame
+  	    //[2] Calculate the linear representation vector of the frame descriptor in the descriptor dictionary
 	    pKFini->ComputeBoW();
 	    pKFcur->ComputeBoW();
 
-   // 【3】地图中插入关键帧 Insert KFs in the map
+   	    // 【3】Insert KFs in the map
 	    mpMap->AddKeyFrame(pKFini);
 	    mpMap->AddKeyFrame(pKFcur);
 
-   // 【4】创建地图点 关联到 关键帧 Create MapPoints and asscoiate to keyframes
-	   // 地图点中需要加入其一些属性：
-	  //1. 观测到该地图点的关键帧（对应的关键点）；
-	  //2. 该MapPoint的描述子；
-	  //3. 该MapPoint的平均观测方向和观测距离。
+            // 【4】Create MapPoints and asscoiate to keyframes
+	   // Some attributes need to be added to the map point:
+	  //1. Observe the key frame of the map point (corresponding key point);
+	  //2. The descriptor of the MapPoint;
+	  //3. The average observation direction and observation distance of the MapPoint.
 	    for(size_t i=0; i<mvIniMatches.size();i++)
 	    {
-		if(mvIniMatches[i]<0)// 不好的匹配不要
+		if(mvIniMatches[i]<0)// bad match don't
 		    continue;
 
-	// 【5】创建地图点 Create MapPoint.
-		cv::Mat worldPos(mvIniP3D[i]);// mvIniP3D 三角化得到的 3D点  vector 3d转化成 mat 3d
+		// 【5】Create MapPoint.
+		cv::Mat worldPos(mvIniP3D[i]);// Convert the 3D point vector 3d obtained by mvIniP3D triangulation into mat 3d
 		MapPoint* pMP = new MapPoint(worldPos,pKFcur,mpMap);
 
-		pKFini->AddMapPoint(pMP,i);// 初始帧 添加地图点
-		pKFcur->AddMapPoint(pMP,mvIniMatches[i]);// 当前帧 添加地图点
+		pKFini->AddMapPoint(pMP,i);// Initial frame Add map point
+		pKFcur->AddMapPoint(pMP,mvIniMatches[i]);// current frame add map point
 		
-        // 【6】地图点 添加观测帧  参考帧和当前帧 均可以观测到 该地图点
+        	// 【6】Add an observation frame to a map point The map point can be observed in both the reference frame and the current frame
 		pMP->AddObservation(pKFini,i);
 		pMP->AddObservation(pKFcur,mvIniMatches[i]);
 		
-        // 【7】 更新地图点的一些新的参数 描述子 观测方向 观测距离
-		pMP->ComputeDistinctiveDescriptors();// 地图点 在 所有观测帧上的 最具有代表性的 描述子
-		pMP->UpdateNormalAndDepth();// 该MapPoint的平均观测方向和观测距离。
-		// 更新 地图点 相对各个 观测帧 相机中心 单位化坐标
-	       // 更新 地图点 在参考帧下 各个金字塔层级 下的  最小最大距离
-        // 【8】当前帧 关联到地图点
+        	// [7] Update some new parameters of map points, descriptor observation direction observation distance
+		pMP->ComputeDistinctiveDescriptors();// The most representative descriptor of the map point on all observation frames
+		pMP->UpdateNormalAndDepth();// The average viewing direction and viewing distance for this MapPoint.
+		// Update map points relative to each observation frame camera center normalized coordinates
+	       // Update the minimum and maximum distances of map points under each pyramid level under the reference frame
+        	// 【8】The current frame is associated with the map point
 		//Fill Current Frame structure
 		mCurrentFrame.mvpMapPoints[mvIniMatches[i]] = pMP;
-		mCurrentFrame.mvbOutlier[mvIniMatches[i]] = false;// 是好的点  离群点标志
-	// 【9】地图 添加地图点
-		//Add to Map
+		mCurrentFrame.mvbOutlier[mvIniMatches[i]] = false;// is a good point outlier sign
+		// 【9】Add map point
 		mpMap->AddMapPoint(pMP);
 	    }
 
 	    // Update Connections
-     // 【10】跟新关键帧的 连接关系   被观测的次数
-	   //还需要更新关键帧之间连接关系（以共视地图点的数量作为权重）：
+     	    // [10] The number of times the connection relationship with the new keyframe is observed
+	   // It is also necessary to update the connection relationship between keyframes (with the number of common view map points as the weight):
 	    pKFini->UpdateConnections();
 	    pKFcur->UpdateConnections();
 
 	    // Bundle Adjustment
-	    cout << "新地图 New Map created with " << mpMap->MapPointsInMap() << " points" << endl;
-        // 【11】 全局优化地图 BA最小化重投影误差
-	    Optimizer::GlobalBundleAdjustemnt(mpMap,20);// 对这两帧姿态进行全局优化重投影误差（LM）：
-	      // 注意这里使用的是全局优化，和回环检测调整后的大回环优化使用的是同一个函数。
+	    cout << "New Map created with " << mpMap->MapPointsInMap() << " points" << endl;
+            // [11] Globally optimize map BA to minimize reprojection error
+	    Optimizer::GlobalBundleAdjustemnt(mpMap,20);// Globally optimize the reprojection error (LM) for these two frame poses:
+	      // Note that the global optimization is used here, and the same function is used as the large loopback optimization after the loop closure detection adjustment.
 	    
         // 【12】设置 深度中值 为 1 Set median depth to 1
 	    // 需要归一化第一帧中地图点深度的中位数；
