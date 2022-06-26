@@ -543,52 +543,52 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 		    return;
 	    }  
 	    
-// 步骤2：后面帧的跟踪 ==========================================================================================================
-      // 1. 跟踪上一帧得到一个对位姿的初始估计.
-	 // 系统已经初始化(地图中已经有3d点) 跟踪上一帧 特征点对 计算相机移动 位姿----
-     // 2. 跟踪局部地图, 图优化对位姿进行精细化调整
-     // 3. 跟踪失败后的处理（两两跟踪失败 or 局部地图跟踪失败）
+// Step 2: Tracking of subsequent frames
+      // 1. Track the previous frame to get an initial estimate of the pose.
+	 // The system has been initialized (there are already 3d points in the map) Track the previous frame Feature point pair Calculate camera movement Pose----
+     // 2. Track local maps, map optimization to fine-tune the pose
+     // 3. Processing after tracking failure (two-by-two tracking failure or partial map tracking failure)
 	    else
 	    {
-		bool bOK; // bOK为临时变量，用于表示每个函数是否执行成功
+		bool bOK; // bOK is a temporary variable used to indicate whether each function is executed successfully
 		// Initial camera pose estimation using motion model or relocalization (if tracking is lost)
-		// 在viewer中有个开关 menuLocalizationMode ，有它控制是否 ActivateLocalizationMode ，并最终管控mbOnlyTracking
-		// mbOnlyTracking等于false表示正常VO模式（有地图更新），mbOnlyTracking等于true表示用户手动选择定位模式
-     // 1.跟踪上一帧=============================================================================================================
-           // 1. 跟踪 + 建图 + 重定位==================================================================================		
-		if(!mbOnlyTracking)// 跟踪 + 建图 + 重定位（跟踪丢失后进行重定位）
+		// There is a switch in the viewer menuLocalizationMode , which controls whether to ActivateLocalizationMode , and finally controls mbOnlyTracking
+		// mbOnlyTracking equal to false means normal VO mode (with map update), mbOnlyTracking equal to true means the user manually selects the positioning mode
+     // 1. Track the previous frame=============================================================================================================
+           // 1. Tracking + Mapping + Relocation==================================================================================		
+		if(!mbOnlyTracking)// Tracking + Mapping + Relocating (relocating after tracking is lost)
 		{
 		    // Local Mapping is activated. This is the normal behaviour, unless
 		    // you explicitly activate the "only tracking" mode.
-                // A. 正常初始化成功==============================================================================
-		    if(mState==OK)//状态ok 未跟丢
+                // A. Normal initialization is successful==============================================================================
+		    if(mState==OK)//Status ok not lost
 		    {
-			// 检查并更新上一帧被替换的MapPoints
-			// 更新Fuse函数和 SearchAndFuse 函数替换的 MapPoints	      
-			CheckReplacedInLastFrame();// 最后一帧 地图点 是否有替换点 有替换点的则进行替换
-                     // a. 跟踪参考帧模式 移动速度小========================================
-                         // 没有移动 跟踪参考关键帧(运动模型是空的)  或 刚完成重定位
-                         // mCurrentFrame.mnId < mnLastRelocFrameId+2这个判断不应该有
-                         // 应该只要mVelocity不为空，就优先选择TrackWithMotionModel
-                         // mnLastRelocFrameId 上一次重定位的那一帧
-			if(mVelocity.empty() || mCurrentFrame.mnId < mnLastRelocFrameId + 2)// 最新重定位的id
+			// Check and update MapPoints that were replaced in the previous frame
+			// Updated MapPoints replaced by Fuse function and SearchAndFuse function      
+			CheckReplacedInLastFrame();// The last frame map point Whether there is a replacement point, if there is a replacement point, replace it
+                     // a. Tracking reference frame mode Small moving speed========================================
+                         // No movement Tracking reference keyframes (motion model is empty) or just done retargeting
+                         // mCurrentFrame.mnId < mnLastRelocFrameId+2 This judgment should not be
+                         // TrackWithMotionModel should be preferred as long as mVlocity is not empty
+                         // mnLastRelocFrameId The frame of the last relocation
+			if(mVelocity.empty() || mCurrentFrame.mnId < mnLastRelocFrameId + 2)// The id of the latest relocation
 			{
-			        // 将上一帧的位姿作为当前帧的初始位姿
-                                // 通过BoW的方式在参考帧中找当前帧特征点的匹配点
-                                // 优化每个特征点都对应3D点重投影误差即可得到位姿
-			    bOK = TrackReferenceKeyFrame();// 跟踪参考关键帧 中的 地图点 大于10个 返回真
+			        // Use the pose of the previous frame as the initial pose of the current frame
+                                // Find the matching point of the feature point of the current frame in the reference frame by BoW
+                                // The pose can be obtained by optimizing each feature point to correspond to the 3D point reprojection error
+			    bOK = TrackReferenceKeyFrame();// If there are more than 10 map points in the tracking reference keyframe, return true
 			}
-		     // b. 有移动 先进行移动 跟踪 模式=======================================
+		        // b. There is movement, move first   Tracking mode=======================================
 			else
 			{
-			    // 根据 恒速模型 设定 当前帧的初始位姿
-                            // 通过投影的方式在 上一帧参考帧 中找 当前帧特征点 的 匹配点
-                            // 优化每个 特征点所 对应3D点的投影误差 即可得到位姿
-			    bOK = TrackWithMotionModel();// 移动跟踪模式, 跟踪上一帧
-			    if(!bOK)//没成功 则尝试 进行 跟踪参考帧 模式
-				// 不能根据固定运动速度模型预测当前帧的位姿态，通过bow加速匹配（SearchByBow）
-				// 最后通过优化得到优化后的位姿			      
-				bOK = TrackReferenceKeyFrame();// 跟踪参考帧 模式 大于10个 返回真
+			    // Set the initial pose of the current frame according to the constant velocity model
+                            // Find the matching point of the feature point of the current frame in the reference frame of the previous frame by means of projection
+                            // The pose can be obtained by optimizing the projection error of the 3D point corresponding to each feature point
+			    bOK = TrackWithMotionModel();// Motion tracking mode, track the previous frame
+			    if(!bOK)//If unsuccessful, try to track the reference frame mode
+				// The position and attitude of the current frame cannot be predicted according to the fixed motion speed model, and the matching is accelerated by bow (SearchByBow)
+				// Finally, the optimized pose is obtained by optimization		      
+				bOK = TrackReferenceKeyFrame();// If the tracking reference frame mode is greater than 10, return true
 			}
 		    }
                 // B. 更丢了，重定位模式===========================================================================
