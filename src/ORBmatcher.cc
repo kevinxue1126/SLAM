@@ -280,32 +280,32 @@ namespace ORB_SLAM2
 				bestDist2=dist;
 			    }
 			}
-// 步骤5：根据阈值 和 角度投票剔除误匹配
-			if(bestDist1<= TH_LOW)// 最短的距离 小于阈值 
+			// Step 5: Voting out false matches based on threshold and angle
+			if(bestDist1<= TH_LOW)// The shortest distance is less than the threshold 
 			{
 			    // trick!
-			    // 最佳匹配比次佳匹配明显要好，那么最佳匹配才真正靠谱
+			    // The best match is obviously better than the next best match, then the best match is really reliable
 			    if(static_cast<float>(bestDist1) < mfNNratio*static_cast<float>(bestDist2)) 
 			    {
-// 步骤6：更新当前帧特征点对应的 地图点MapPoint		      
-				vpMapPointMatches[bestIdxF]=pMP;// 匹配到的 参考关键中 的地图点
+				// Step 6: Update the map point MapPoint corresponding to the feature point of the current frame		      
+				vpMapPointMatches[bestIdxF]=pMP;// Map point in the matched reference key
 
-				const cv::KeyPoint &kp = pKF->mvKeysUn[realIdxKF];//地图点在 参考关键帧中的 像素点
+				const cv::KeyPoint &kp = pKF->mvKeysUn[realIdxKF];//The pixel point of the map point in the reference keyframe
 
-				if(mbCheckOrientation)// 查看方向是否 合适
+				if(mbCheckOrientation)// Check if the direction is right
 				{
 				    // trick!
-				    // angle：每个特征点在提取描述子时的旋转主方向角度，如果图像旋转了，这个角度将发生改变
-				    // 所有的特征点的角度变化应该是一致的，通过直方图统计得到最准确的角度变化值
-				    float rot = kp.angle - F.mvKeys[bestIdxF].angle;// 当前帧 的 关键点 的方向和匹配点方向 变化
+				    // angle：The rotation main direction angle of each feature point when extracting the descriptor, if the image is rotated, this angle will change
+				    // The angle change of all feature points should be consistent, and the most accurate angle change value is obtained through histogram statistics
+				    float rot = kp.angle - F.mvKeys[bestIdxF].angle;// The direction of the key point of the current frame and the direction of the matching point change
 				    if(rot<0.0)
 					rot+=360.0f;
 				    int bin = round(rot*factor);
 				    if(bin==HISTO_LENGTH)
 					bin=0;			
-				    // 对于每一对匹配点的角度差，均可以放入一个bin的范围内（360/HISTO_LENGTH）
+				    // The angle difference of each pair of matching points can be put into the range of a bin (360/HISTO_LENGTH)
 				    assert(bin>=0 && bin<HISTO_LENGTH);
-				    rotHist[bin].push_back(bestIdxF);// 方向 直方图
+				    rotHist[bin].push_back(bestIdxF);// Orientation histogram
 				}
 				nmatches++;
 			    }
@@ -326,26 +326,26 @@ namespace ORB_SLAM2
 		}
 	    }
 
-// 步骤7： 根据方向剔除误匹配的点
+	    // Step 7: Eliminate mismatched points based on orientation
 	    if(mbCheckOrientation)
 	    {
 		int ind1=-1;
 		int ind2=-1;
 		int ind3=-1;
-	      // 统计方向偏差直方图 频率最高的三个bin保留，其他范围内的匹配点剔除。
-	      // 另外，若最高的比第二高的高10倍以上，则只保留最高的bin中的匹配点。
-	      // 若最高的比第 三高的高10倍以上，则 保留最高的和第二高bin中的匹配点。
+	       // Statistical direction deviation histogram The three bins with the highest frequency are retained, and the matching points in other ranges are eliminated.
+	       // In addition, if the highest one is more than 10 times higher than the second highest, only the matching points in the highest bin are kept.
+	       // If the highest is more than 10 times higher than the third highest, the matching points in the highest and second highest bins are kept.
 		ComputeThreeMaxima(rotHist,HISTO_LENGTH,ind1,ind2,ind3);
 
 		for(int i=0; i<HISTO_LENGTH; i++)
 		{
-		  // 如果特征点的旋转角度变化量属于这三个组，则保留
-		    if(i==ind1 || i==ind2 || i==ind3)// 统计直方图最高的三个bin 跳过 清空  保留 
+		    // If the rotation angle variation of the feature point belongs to these three groups, keep
+		    if(i==ind1 || i==ind2 || i==ind3)// Three bins with the highest statistical histogram
 			continue;
 		    for(size_t j=0, jend=rotHist[i].size(); j<jend; j++)
 		    {
-		      // 将除了ind1 ind2 ind3以外的匹配点去掉
-			vpMapPointMatches[rotHist[i][j]]=static_cast<MapPoint*>(NULL);// 其他范围内的匹配点剔除。
+		        // Remove the matching points except ind1, ind2, ind3
+			vpMapPointMatches[rotHist[i][j]]=static_cast<MapPoint*>(NULL);// Matching points in other ranges are eliminated.
 			nmatches--;
 		    }
 		}
@@ -354,122 +354,117 @@ namespace ORB_SLAM2
 	    return nmatches;
 	}
 
-  /**
-  * @brief   为关键帧 pKF 中 还没有匹配到3D地图点的 2D特征点 从所给的地图点中匹配 地图点
-  * 根据Sim3变换 转化到 欧式变换，
-  * 将每个vpPoints投影到 参考关键帧pKF的图像像素坐标系上，并根据尺度确定一个搜索区域， \n
-  * 根据该MapPoint的描述子 与 该区域内的 特征点 进行匹配  \n
-  * 如果匹配误差小于TH_LOW即匹配成功，更新vpMatched \n
-  * @param  pKF                KeyFrame            参考关键帧
-  * @param  Scw               参考关键帧 的 相似变换   [s*R t] 
-  * @param  vpPoints       地图点
-  * @param  vpMatched   参考关键帧特征点 对应的匹配点
-  * @param  th                  匹配距离 阈值
-  * @return                        成功匹配的数量
-  */
+	  /**
+	  * @brief   For the 2D feature points in the key frame pKF that have not been matched to the 3D map points, match the map points from the given map points
+	  * Convert to Euclidean transformation according to Sim3 transformation,
+	  * Project each vpPoints to the image pixel coordinate system of the reference key frame pKF, and determine a search area according to the scale, 
+	  * and match the feature points in the area according to the descriptor of the MapPoint. 
+	  * If the matching error is less than TH_LOW, the matching is successful. update vpMatched
+	  * @param  pKF           KeyFrame            reference keyframe
+	  * @param  Scw           Similarity transformation with reference keyframes   [s*R t] 
+	  * @param  vpPoints      Map point
+	  * @param  vpMatched     Refer to the matching points corresponding to the keyframe feature points
+	  * @param  th            Match distance threshold
+	  * @return               Number of successful matches
+	  */
 	int ORBmatcher::SearchByProjection(KeyFrame* pKF, cv::Mat Scw, const vector<MapPoint*> &vpPoints, vector<MapPoint*> &vpMatched, int th)
 	{
 	    // Get Calibration Parameters for later projection
-	  // 相机内参数
+	    // In-camera parameters
 	    const float &fx = pKF->fx;
 	    const float &fy = pKF->fy;
 	    const float &cx = pKF->cx;
 	    const float &cy = pKF->cy;
 
-// 步骤1：相似变换转换到欧式变换 归一化相似变换矩阵  Decompose Scw
+	    // Step 1: Convert the similarity transformation to Euclidean transformation, and normalize the similarity transformation matrix Decompose Scw
 	    // | s*R  t|
 	    // |   0    1|
-	    cv::Mat sRcw = Scw.rowRange(0,3).colRange(0,3);// 相似变换  旋转矩阵
-	    const float scw = sqrt(sRcw.row(0).dot(sRcw.row(0)));// 计算相似变换矩阵 的尺度s
-	    cv::Mat Rcw = sRcw/scw;// 归一化的 旋转矩阵
-	    cv::Mat tcw = Scw.rowRange(0,3).col(3)/scw;//  归一化的 计算相似变换矩阵
-	    cv::Mat Ow = -Rcw.t()*tcw;// pKF坐标系下，世界坐标系到pKF的位移，方向由世界坐标系指向pKF
-	    // Rwc * twc  用来计算 地图点 距离相机的距离 进而推断 在图像金字塔中可能的尺度
+	    cv::Mat sRcw = Scw.rowRange(0,3).colRange(0,3);// similarity transformation  rotation matrix
+	    const float scw = sqrt(sRcw.row(0).dot(sRcw.row(0)));// Calculate the scale s of the similarity transformation matrix
+	    cv::Mat Rcw = sRcw/scw;// normalized rotation matrix
+	    cv::Mat tcw = Scw.rowRange(0,3).col(3)/scw;//  Normalized Computed Similarity Transformation Matrix
+	    cv::Mat Ow = -Rcw.t()*tcw;// In the pKF coordinate system, the displacement from the world coordinate system to pKF, the direction from the world coordinate system to pKF
+	    // Rwc * twc  Used to calculate the distance of map points from the camera to infer possible scales in the image pyramid
 
 	    // Set of MapPoints already found in the KeyFrame
-// 步骤2： 使用set类型，并去除没有匹配的点，用于快速检索某个MapPoint是否有匹配
+	    // Step 2: Use the set type and remove the unmatched points to quickly retrieve whether a MapPoint has a match
 	    set<MapPoint*> spAlreadyFound(vpMatched.begin(), vpMatched.end());
 	    spAlreadyFound.erase(static_cast<MapPoint*>(NULL));
 
 	    int nmatches=0;
 
 	    // For each Candidate MapPoint Project and Match
-	// 步骤3： 遍历所有的 地图点 MapPoints
+	    // Step 3: Traverse all map points MapPoints
 	    for(int iMP=0, iendMP=vpPoints.size(); iMP<iendMP; iMP++)
 	    {
 		MapPoint* pMP = vpPoints[iMP];
 
 		// Discard Bad MapPoints and already found
-		// 丢弃坏的MapPoints和已经匹配上的MapPoints
 		if(pMP->isBad() || spAlreadyFound.count(pMP))
 		    continue;
 
-// 步骤4：地图点 根据变换  转到当前帧 相机坐标系下	
+		// Step 4: The map point is transferred to the current frame according to the transformation, under the camera coordinate system	
 		// Get 3D Coords.
-		// 地图点的 世界坐标
+		// world coordinates of the map point
 		cv::Mat p3Dw = pMP->GetWorldPos();
 		// Transform into Camera Coords.
-		cv::Mat p3Dc = Rcw*p3Dw + tcw;//  转到当前帧 相机坐标系下
-		// 剔除深度<0 的点Depth must be positive
+		cv::Mat p3Dc = Rcw*p3Dw + tcw;//  Go to the current frame, under the camera coordinate system
+		// Depth must be positive
 		if(p3Dc.at<float>(2) < 0.0)
 		    continue;
 
 		// Project into Image
-// 步骤5：根据相机内参数 投影到 当前帧的图像像素坐标系下	
+		// Step 5: Project to the image pixel coordinate system of the current frame according to the internal parameters of the camera	
 		const float invz = 1/p3Dc.at<float>(2);
 		const float x = p3Dc.at<float>(0)*invz;
 		const float y = p3Dc.at<float>(1)*invz;
 		const float u = fx*x+cx;
 		const float v = fy*y+cy;
 		// Point must be inside the image
-		// 地图点投影过来 如果不在图像范围内 就没有匹配点
+		// The map point is projected, if it is not within the image range, there is no matching point
 		if(!pKF->IsInImage(u,v))
-		    continue;// 剔除
+		    continue;
 
-		// Depth must be inside the scale invariance region of the point
-//步骤6：  判断距离是否在尺度协方差范围内 剔除
+		//Step 6: Determine whether the distance is within the scale covariance range
 		const float maxDistance = pMP->GetMaxDistanceInvariance();
 		const float minDistance = pMP->GetMinDistanceInvariance();
 		cv::Mat PO = p3Dw-Ow;
-	    //地图点 距离相机的距离 进而推断 在图像金字塔中可能的尺度 越远尺度小 越近尺度大
+	    	// The distance of the map point from the camera and then infer the possible scale in the image pyramid, the farther the scale is, the smaller the scale is, and the closer the scale is.
 		const float dist = cv::norm(PO);
 		if(dist<minDistance || dist>maxDistance)
-		    continue;//剔除
+		    continue;
 		// Viewing angle must be less than 60 deg
-		// 观察视角 必须小于 60度
 		cv::Mat Pn = pMP->GetNormal();
 		if(PO.dot(Pn) < 0.5*dist)
 		    continue;
 
-// 步骤7： 根据尺度确定搜索半径 进而在图像上确定 候选 关键点	
-		int nPredictedLevel = pMP->PredictScale(dist,pKF);//更加距离预测点处于的 图像金字塔尺度 
+		// Step 7: Determine the search radius according to the scale and then determine the candidate key points on the image	
+		int nPredictedLevel = pMP->PredictScale(dist,pKF);//The image pyramid scale at which the prediction point is farther away
 		// Search in a radius
 		const float radius = th * pKF->mvScaleFactors[nPredictedLevel];
-		// 在图像上确定 候选 关键点	
+		// Identify candidates and keypoints on an image
 		const vector<size_t> vIndices = pKF->GetFeaturesInArea(u,v,radius);
 		if(vIndices.empty())
 		    continue;
 		// Match to the most similar keypoint in the radius
 		
-//  步骤8：遍历候选关键点  地图点 和 关键帧上 候选关键点 进行描述子匹配 计算距离 保留最近距离的匹配
-		const cv::Mat dMP = pMP->GetDescriptor();// 地图点 对应的 描述子
-		int bestDist = 256;//距离上限
+		// Step 8: Traverse the candidate key points, map points and candidate key points on the key frame, perform descriptor matching, and calculate the matching distance retaining the closest distance
+		const cv::Mat dMP = pMP->GetDescriptor();// Descriptors corresponding to map points
+		int bestDist = 256;//distance ceiling
 		int bestIdx = -1;
-	      // 遍历搜索区域内所有特征点，与该MapPoint的描述子进行匹配
+	        // Traverse all feature points in the search area and match the descriptor of the MapPoint
 		// vector<size_t>::const_iterator
 		for( auto vit=vIndices.begin(), vend=vIndices.end(); vit!=vend; vit++)
 		{
 		    const size_t idx = *vit;
-	      //跳过  已经匹配上地图点 MapPoints 的像素点
 		    if(vpMatched[idx])
 			continue;
-	      // 候选关键点 不在 由地图点预测的尺度到 最高尺度范围内 直接跳过
 		    const int &kpLevel= pKF->mvKeysUn[idx].octave;
 		    if(kpLevel < nPredictedLevel-1 || kpLevel > nPredictedLevel)
-			continue;// 直接跳过
+			continue;
 	  
-	      // 计算距离 保存 最短的距离 对应的 关键点
-		    const cv::Mat &dKF = pKF->mDescriptors.row(idx);// 关键点对应的描述子
+	      	    // Calculate the distance and save the key point corresponding to the shortest distance
+		    const cv::Mat &dKF = pKF->mDescriptors.row(idx);// Descriptors corresponding to key points
 		    const int dist = DescriptorDistance(dMP,dKF);
 
 		    if(dist<bestDist)
@@ -481,7 +476,7 @@ namespace ORB_SLAM2
 
 		if(bestDist<=TH_LOW)// <50
 		{
-		    vpMatched[bestIdx]=pMP;// 该 特征点 匹配到的 地图点
+		    vpMatched[bestIdx]=pMP;// The map point to which the feature point matches
 		    nmatches++;
 		}
 	    }
@@ -489,104 +484,95 @@ namespace ORB_SLAM2
 	    return nmatches;
 	}
 
-  // 单目初始化时  的 匹配
-  // mInitialFrame 第一帧  mCurrentFrame当前帧第二帧 
-  // mvbPreMatched是第一帧中的所有特征点；
-  // mvIniMatches标记匹配状态，未匹配上的标为-1；
-  /*找到了可能的匹配点，下一步进行匹配计算，
-  * 根据可能匹配特征点的描述子计算距离，
-  * 确定最佳匹配，另外如果考虑特征点的方向，
-  * 则将第一帧中的特征的方向角度减去对应第二帧的特征的方向角度，
-  * 将值划分为直方图，则会在0度和360度左右对应的组距比较大，
-  * 这样就可以对其它相差太大的角度可以进行剔除，
-  */
-  /**
-  * @brief   单目初始化时 前两帧的关键点匹配 2D-2D 计算变换矩阵 在帧2中为 帧1的 特征点找匹配点
-  * 将每个vpPoints投影到 参考关键帧pKF的图像像素坐标系上，并根据尺度确定一个搜索区域， \n
-  * 根据该MapPoint的描述子 与 该区域内的 特征点 进行匹配  \n
-  * 如果匹配误差小于TH_LOW即匹配成功，更新vpMatched \n
-  * @param  F1                            Frame         普通帧
-  * @param  F2		             Frame         普通帧
-  * @param  vbPrevMatched     先前 帧F1 已经有的匹配
-  * @param  vpMatches12        帧1 特征点 在帧2 中 的匹配点
-  * @param  windowSize           在帧2 上搜索区域框大小  
-  * @return                                   成功匹配的数量
-  */
+  
+	  /**
+	  * @brief   When the monocular is initialized, the key points of the first two frames are matched 2D-2D to calculate the transformation matrix. In frame 2, find matching points for the feature points of frame 1
+	  * Project each vpPoints to the image pixel coordinate system of the reference key frame pKF, 
+	  * and determine a search area according to the scale, and match the feature points in the area according to the descriptor of the MapPoint
+	  * 
+	  * If the matching error is less than TH_LOW, the matching is successful, and vpMatched is updated.
+	  * @param  F1                   Frame         normal frame
+	  * @param  F2		         Frame         normal frame
+	  * @param  vbPrevMatched        Matches already in the previous frame F1
+	  * @param  vpMatches12          Matching points of frame 1 feature points in frame 2
+	  * @param  windowSize           Search area box size on frame 2  
+	  * @return                      Number of successful matches
+	  */
 	int ORBmatcher::SearchForInitialization(Frame &F1, Frame &F2, vector<cv::Point2f> &vbPrevMatched, vector<int> &vnMatches12, int windowSize)
 	{
 	    int nmatches=0;
-	// 为帧1初始化 帧中关键点数量 个 匹配点
+	    // Initialize the number of matching points in the frame for frame 1
 	    vnMatches12 = vector<int>(F1.mvKeysUn.size(),-1);
-	// 统计匹配点对的 方向差值  同一个匹配 方向相差不大
-	    vector<int> rotHist[HISTO_LENGTH];//  角度直方图  30个  
+	    // Count the direction difference of matching point pairs, the same matching direction is not much different
+	    vector<int> rotHist[HISTO_LENGTH];//  Angle histogram 30
 	    for(int i=0;i<HISTO_LENGTH;i++)
-		rotHist[i].reserve(500);// 直方图 每个 柱可以记录 500个点
+		rotHist[i].reserve(500);// Histogram can record 500 points per bar
 	    const float factor = 1.0f/HISTO_LENGTH;
 
-	    vector<int> vMatchedDistance(F2.mvKeysUn.size(),INT_MAX);// 帧2 的匹配点对距离
-	    vector<int> vnMatches21(F2.mvKeysUn.size(),-1);// 帧2 的匹配点
-// 步骤1：为帧1的 每一个 关键点 在帧2 中 寻找匹配点
+	    vector<int> vMatchedDistance(F2.mvKeysUn.size(),INT_MAX);// Matching point pair distance for frame 2
+	    vector<int> vnMatches21(F2.mvKeysUn.size(),-1);// Match point of frame 2
+	    // Step 1: Find matching points in frame 2 for each keypoint in frame 1
 	    for(size_t i1=0, iend1=F1.mvKeysUn.size(); i1<iend1; i1++)
 	    {
-		cv::KeyPoint kp1 = F1.mvKeysUn[i1];// 帧1的 每一个 关键点
-		int level1 = kp1.octave;//在图像金字塔上的 层数
+		cv::KeyPoint kp1 = F1.mvKeysUn[i1];// Every keypoint of frame 1
+		int level1 = kp1.octave;//The number of layers on the image pyramid
 		if(level1 > 0)
 		    continue;
 		
-	      //在 2图上 对应 方块区域的 特征点  候选匹配点
+	      	//Feature point candidate matching points corresponding to the square area on the 2 map
 		vector<size_t> vIndices2 = F2.GetFeaturesInArea(vbPrevMatched[i1].x,vbPrevMatched[i1].y, windowSize,level1,level1);
 
 		if(vIndices2.empty())
 		    continue;
 		
-// 步骤2：描述子匹配计算距离	
-	      // 获取帧1 的 关键点的特征描述子
-		cv::Mat d1 = F1.mDescriptors.row(i1);// 1图的 特征点的 描述子
-		int bestDist = INT_MAX;// 初始最小距离
+		// Step 2: Descriptor matching to calculate distance	
+	        // Get the feature descriptor of the keypoint of frame 1
+		cv::Mat d1 = F1.mDescriptors.row(i1);// 1 Descriptor of the feature points of the graph
+		int bestDist = INT_MAX;// initial minimum distance
 		int bestDist2 = INT_MAX;
 		int bestIdx2 = -1;
-	      // vector<size_t>::iterator vit
-	      // 对 帧2中可能的特征点进行遍历
-		for(auto vit = vIndices2.begin(); vit!=vIndices2.end(); vit++)// 对应2图中 对应区域的  每一个的关键点
+	        // vector<size_t>::iterator vit
+	        // Traverse the possible feature points in frame 2
+		for(auto vit = vIndices2.begin(); vit!=vIndices2.end(); vit++)// The key points corresponding to each of the corresponding regions in the 2 graphs
 		{
-		    size_t i2 = *vit;//关键点下标
-		  // 对应帧2 候选区域 关键点的 特征描述子    
-		    cv::Mat d2 = F2.mDescriptors.row(i2);// 描述子
-		  // 描述子之间的距离    
+		    size_t i2 = *vit;//key point subscript
+		    // The feature descriptor corresponding to the key points of the candidate region of frame 2   
+		    cv::Mat d2 = F2.mDescriptors.row(i2);// descriptor
+		    // distance between descriptors    
 		    int dist = DescriptorDistance(d1,d2);
 
-		    if(vMatchedDistance[i2] <= dist)// 距离过大，这一点直接跳过
+		    if(vMatchedDistance[i2] <= dist)// The distance is too large, skip this point directly
 			continue;
 		    
-// 步骤3：保留最小和次小距离对应的 匹配点
-		    if(dist<bestDist)//最短距离
+		    // Step 3: Keep the matching points corresponding to the smallest and next smallest distances
+		    if(dist<bestDist)//shortest distance
 		    {
 			bestDist2=bestDist;
-			bestDist=dist;// 距离较小的 
+			bestDist=dist;// smaller distance 
 			bestIdx2=i2;
 		    }
-		    else if(dist<bestDist2)// 次短距离
+		    else if(dist<bestDist2)// next short distance
 		    {
-			bestDist2=dist;// 距离较小的 
+			bestDist2=dist;// smaller distance
 		    }
 		}
 
-// 步骤4： 确保最小距离小于阈值
+		// Step 4: Make sure the minimum distance is less than the threshold
 		if(bestDist<=TH_LOW)//<50
 		{
-		  // trick!
-		  // 最佳匹配比次佳匹配明显要好，那么最佳匹配才真正靠谱
+		     // trick!
+		    // The best match is obviously better than the next best match, then the best match is really reliable
 		    if(bestDist < (float)bestDist2*mfNNratio)
 		    {
-		      // 如果已经匹配，则说明当前特征已经有过对应，则就会有两个对应，移除该匹配
+		      // If it has been matched, it means that the current feature has already been matched, then there will be two correspondences, remove the match
 			if(vnMatches21[bestIdx2] >= 0)
 			{
 			    vnMatches12[ vnMatches21[bestIdx2] ] = -1;
 			    nmatches--;
 			}
-			vnMatches12[i1]=bestIdx2;// 帧1 关键点  匹配到的帧2 中的关键点 下标
-			vnMatches21[bestIdx2 ] = i1;// 帧2 关键点 匹配到的 帧1 中的关键点 下标
-			vMatchedDistance[bestIdx2]=bestDist;// 距离
+			vnMatches12[i1]=bestIdx2;// frame 1 key point matched key point in frame 2 subscript
+			vnMatches21[bestIdx2 ] = i1;// The subscript of the key point in frame 1 to which the key point of frame 2 is matched
+			vMatchedDistance[bestIdx2]=bestDist;//distance
 			nmatches++;
 
 			if(mbCheckOrientation)
@@ -598,29 +584,29 @@ namespace ORB_SLAM2
 			    if(bin==HISTO_LENGTH)
 				bin=0;
 			    assert(bin>=0 && bin<HISTO_LENGTH);
-			    rotHist[bin].push_back(i1);//得到 方向直方图
+			    rotHist[bin].push_back(i1);//get direction histogram
 			}
 		    }
 		}
 	    }
 	    
-// 步骤5：这样就可以对其它相差太大的角度可以进行剔除，
+	    // Step 5: In this way, other angles that are too different can be eliminated.
 	    if(mbCheckOrientation)
 	    {
 		int ind1=-1;
 		int ind2=-1;
 		int ind3=-1;
-	// 统计直方图最高的三个bin保留，其他范围内的匹配点剔除。
-	// 另外，若最高的比第二高的高10倍以上，则只保留最高的bin中的匹配点。
-	// 若最高的比第 三高的高10倍以上，则 保留最高的和第二高bin中的匹配点。
+		// The three highest bins in the statistical histogram are retained, and matching points in other ranges are eliminated.
+		// In addition, if the highest one is more than 10 times higher than the second highest, only the matching points in the highest bin are kept.
+		// If the highest is more than 10 times higher than the third, then keep the matching points in the highest and second highest bins.
 		ComputeThreeMaxima(rotHist,HISTO_LENGTH,ind1,ind2,ind3);
 	
 		for(int i=0; i<HISTO_LENGTH; i++)
 		{
-		  // 对可能的一致的方向就不予考虑
+		    // No consideration is given to possible consistent directions
 		    if(i==ind1 || i==ind2 || i==ind3)
 			continue;
-		    // 对剩下方向不一致的匹配进行剔除
+		    // Eliminate matches with inconsistent directions
 		    for(size_t j=0, jend=rotHist[i].size(); j<jend; j++)
 		    {
 			int idx1 = rotHist[i][j];
@@ -633,44 +619,43 @@ namespace ORB_SLAM2
 		}
 
 	    }
-// 步骤6：更新匹配	    
-	    //Update prev matched
+	    // Step 6: Update Matches    
 	    for(size_t i1=0, iend1=vnMatches12.size(); i1<iend1; i1++)
-		if(vnMatches12[i1]>=0)// 帧1 匹配到帧2
-		    vbPrevMatched[i1]=F2.mvKeysUn[vnMatches12[i1]].pt;//对应帧2 的特征点坐标
+		if(vnMatches12[i1]>=0)// Frame 1 matches to frame 2
+		    vbPrevMatched[i1]=F2.mvKeysUn[vnMatches12[i1]].pt;//Corresponding to the feature point coordinates of frame 2
 
 	    return nmatches;
 	}
 
-  /**
-  * @brief 通过词包，对关键帧的特征点进行跟踪，该函数用于闭环检测时两个关键帧间的特征点匹配
-  * 
-  * 通过bow对pKF1和pKF2中的特征点进行快速匹配（不属于同一node(单词)的特征点直接跳过匹配） \n
-  * 对属于同一node的特征点通过描述子距离进行匹配 \n
-  * 根据匹配，更新vpMatches12 \n
-  * 通过距离阈值、比例阈值和角度投票进行剔除误匹配
-  * @param  pKF1               KeyFrame1
-  * @param  pKF2               KeyFrame2
-  * @param  vpMatches12        pKF2中与pKF1匹配的MapPoint，null表示没有匹配
-  * @return                    成功匹配的数量
-  */
+	  /**
+	  * @brief Through the bag of words, the feature points of the key frames are tracked, and this function is used to match the feature points between two key frames during closed-loop detection.
+	  * 
+	  * Quickly match the feature points in pKF1 and pKF2 through bow (feature points that do not belong to the same node (word) directly skip the matching) \n
+	  * Match feature points belonging to the same node by descriptor distance \n
+	  * According to the match, update vpMatches12 \n
+	  * Eliminate false matches by distance threshold, scale threshold and angle voting
+	  * @param  pKF1               KeyFrame1
+	  * @param  pKF2               KeyFrame2
+	  * @param  vpMatches12        MapPoint in pKF2 that matches pKF1, null means no match
+	  * @return                    Number of successful matches
+	  */
 	int ORBmatcher::SearchByBoW(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint *> &vpMatches12)
 	{
-	    const vector<cv::KeyPoint> &vKeysUn1 = pKF1->mvKeysUn;  // 关键帧1 特征点
-	    const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;// 关键帧1 特征点 词典描述向量
-	    const vector<MapPoint*> vpMapPoints1 = pKF1->GetMapPointMatches();// 关键帧1 特征点 匹配的 地图点
-	    const cv::Mat &Descriptors1 = pKF1->mDescriptors;// 键帧1 特征点的 描述子 矩阵
+	    const vector<cv::KeyPoint> &vKeysUn1 = pKF1->mvKeysUn;  // key frame 1 feature point
+	    const DBoW2::FeatureVector &vFeatVec1 = pKF1->mFeatVec;// Key frame 1 feature point dictionary description vector
+	    const vector<MapPoint*> vpMapPoints1 = pKF1->GetMapPointMatches();// Map points matched by keyframe 1 feature points
+	    const cv::Mat &Descriptors1 = pKF1->mDescriptors;// Descriptor matrix of keyframe 1 feature points
 
-	    const vector<cv::KeyPoint> &vKeysUn2 = pKF2->mvKeysUn;  // 关键帧2 特征点
-	    const DBoW2::FeatureVector &vFeatVec2 = pKF2->mFeatVec;// 关键帧2特征点 词典描述向量
-	    const vector<MapPoint*> vpMapPoints2 = pKF2->GetMapPointMatches();// 关键帧2 特征点 匹配的 地图点
-	    const cv::Mat &Descriptors2 = pKF2->mDescriptors;// 键帧2 特征点的 描述子 矩阵
+	    const vector<cv::KeyPoint> &vKeysUn2 = pKF2->mvKeysUn;  // key frame 2 feature points
+	    const DBoW2::FeatureVector &vFeatVec2 = pKF2->mFeatVec;// Key frame 2 feature point dictionary description vector
+	    const vector<MapPoint*> vpMapPoints2 = pKF2->GetMapPointMatches();// Map points matched by keyframe 2 feature points
+	    const cv::Mat &Descriptors2 = pKF2->mDescriptors;// Descriptor matrix of keyframe 2 feature points
 
-	// 为关键帧1的地图点 初始化 匹配点
+	    // map point for keyframe 1 initialization match point
 	    vpMatches12 = vector<MapPoint*>(vpMapPoints1.size(),static_cast<MapPoint*>(NULL));
-	    vector<bool> vbMatched2(vpMapPoints2.size(),false);// 关键帧地图点 匹配标记
+	    vector<bool> vbMatched2(vpMapPoints2.size(),false);// keyframe map point match marker
 
-	// 统计匹配点对的 方向差值  同一个匹配 方向相差不大  
+	    // Count the direction difference of matching point pairs, the same matching direction is not much different
 	    vector<int> rotHist[HISTO_LENGTH];
 	    for(int i=0;i<HISTO_LENGTH;i++)
 		rotHist[i].reserve(500);
