@@ -1821,11 +1821,11 @@ namespace ORB_SLAM2
 
 		for(int i=0; i<HISTO_LENGTH; i++)
 		{
-		    if(i!=ind1 && i!=ind2 && i!=ind3)//最高的三个bin保留
+		    if(i!=ind1 && i!=ind2 && i!=ind3)//The top three bins are reserved
 		    {
 			for(size_t j=0, jend=rotHist[i].size(); j<jend; j++)
 			{
-			    CurrentFrame.mvpMapPoints[rotHist[i][j]]=NULL;// 其他范围内的匹配点剔除
+			    CurrentFrame.mvpMapPoints[rotHist[i][j]]=NULL;// Matching points in other ranges are eliminated
 			    nmatches--;
 			}
 		    }
