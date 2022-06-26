@@ -476,24 +476,24 @@ namespace ORB_SLAM2
 	      }
 	  }
 	  
-// 步骤9：将闭环匹配上关键帧以及相连关键帧的 地图点 MapPoints 投影到当前关键帧进行投影匹配 为当前帧查找更多的匹配
-	  // 根据投影为当前帧查找更多的匹配（成功的闭环匹配需要满足足够多的匹配特征点数）
-	  // 根据Sim3变换，将每个mvpLoopMapPoints投影到mpCurrentKF上，并根据尺度确定一个搜索区域，
-	  // 根据该MapPoint的描述子与该区域内的特征点进行匹配，如果匹配误差小于TH_LOW即匹配成功，更新mvpCurrentMatchedPoints
-	  // mvpCurrentMatchedPoints将用于SearchAndFuse中检测当前帧MapPoints与匹配的MapPoints是否存在冲突
+	  // Step 9: Match the closed loop on the key frame and the map points MapPoints of the connected key frame, project it to the current key frame for projection matching, and find more matches for the current frame
+	  // Find more matches for the current frame based on the projection (successful closed-loop matching needs to meet enough matching feature points)
+	  // According to the Sim3 transformation, each mvpLoopMapPoints is projected onto mpCurrentKF, and a search area is determined according to the scale,
+	  // According to the descriptor of the MapPoint and the feature points in the area, if the matching error is less than TH_LOW, the matching is successful, and mvpCurrentMatchedPoints is updated.
+	  // mvpCurrentMatchedPoints will be used in SearchAndFuse to detect whether there is a conflict between the current frame MapPoints and the matching MapPoints
 	  // Find more matches projecting with the computed Sim3
-	  matcher.SearchByProjection(mpCurrentKF, mScw, mvpLoopMapPoints, mvpCurrentMatchedPoints,10);// 10匹配距离 阈值
+	  matcher.SearchByProjection(mpCurrentKF, mScw, mvpLoopMapPoints, mvpCurrentMatchedPoints,10);
 
 	  // If enough matches accept Loop
 	  
-// 步骤10：判断当前帧 与检测出的所有闭环关键帧是否有足够多的MapPoints匹配	  
+	  // Step 10: Determine whether the current frame matches all the detected closed-loop keyframes with enough MapPoints	  
 	  int nTotalMatches = 0;
 	  for(size_t i=0; i<mvpCurrentMatchedPoints.size(); i++)
 	  {
-	      if(mvpCurrentMatchedPoints[i])//当前帧 关键点 找到匹配的地图点
-		  nTotalMatches++;//匹配点数 ++
+	      if(mvpCurrentMatchedPoints[i])//The key point of the current frame, find the matching map point
+		  nTotalMatches++;//Match points ++
 	  }
-// 步骤11：满足匹配点对数>40 寻找成功 清空mvpEnoughConsistentCandidates
+	  // Step 11: Satisfy the number of matching points > 40, find success, clear mvpEnoughConsistentCandidates
 	  if(nTotalMatches >= 40)
 	  {
 	      for(int i=0; i<nInitialCandidates; i++)
@@ -501,7 +501,7 @@ namespace ORB_SLAM2
 		      mvpEnoughConsistentCandidates[i]->SetErase();
 	      return true;
 	  }
-	  // 没找到
+	  // did not find
 	  else
 	  {
 	      for(int i=0; i<nInitialCandidates; i++)
