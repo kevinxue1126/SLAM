@@ -1564,8 +1564,8 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 		    break;
 
 		KeyFrame* pKF = *itKF;
-                // 根据权重w  二分查找 有序序列 中的某写对象
-                // 返回前 w个 有序关键帧
+                // Binary search for a write object in an ordered sequence according to weight w
+                // Returns the first w ordered keyframes
 		const vector<KeyFrame*> vNeighs = pKF->GetBestCovisibilityKeyFrames(10);
 		// vector<KeyFrame*>::const_iterator
 		for(auto itNeighKF=vNeighs.begin(), itEndNeighKF=vNeighs.end(); itNeighKF != itEndNeighKF; itNeighKF++)
@@ -1575,13 +1575,13 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 		    {
 			if(pNeighKF->mnTrackReferenceForFrame != mCurrentFrame.mnId)
 			{
-			    mvpLocalKeyFrames.push_back(pNeighKF);// 加入 局部关键帧
+			    mvpLocalKeyFrames.push_back(pNeighKF);// Add local keyframes
 			    pNeighKF->mnTrackReferenceForFrame=mCurrentFrame.mnId;
 			    break;
 			}
 		    }
 		}
-  // 2. 子关键帧；
+  		// 2. child keyframes;
 		const set<KeyFrame*> spChilds = pKF->GetChilds();
 		 // set<KeyFrame*>::const_iterator
 		for(auto sit=spChilds.begin(), send=spChilds.end(); sit!=send; sit++)
@@ -1591,19 +1591,19 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 		    {
 			if(pChildKF->mnTrackReferenceForFrame != mCurrentFrame.mnId)
 			{
-			    mvpLocalKeyFrames.push_back(pChildKF);// 加入 局部关键帧
+			    mvpLocalKeyFrames.push_back(pChildKF);// Add local keyframes
 			    pChildKF->mnTrackReferenceForFrame=mCurrentFrame.mnId;
 			    break;
 			}
 		    }
 		}
-// 3. 父关键帧
+		// 3. parent keyframe
 		KeyFrame* pParent = pKF->GetParent();
 		if(pParent)
 		{
 		    if(pParent->mnTrackReferenceForFrame!=mCurrentFrame.mnId)
 		    {
-			mvpLocalKeyFrames.push_back(pParent);// 加入 局部关键帧
+			mvpLocalKeyFrames.push_back(pParent);// Add local keyframes
 			pParent->mnTrackReferenceForFrame=mCurrentFrame.mnId;
 			break;
 		    }
@@ -2044,7 +2044,7 @@ and then BundleAdjustment will be performed on the pose by tracking the local ma
 		    cv::Mat Tcw = pSolver->iterate(5,bNoMore,vbInliers,nInliers);//Iterate 5 times to get the transformation matrix
 
 		    // If Ransac reachs max. iterations discard keyframe
-		    if(bNoMore)//迭代5次效果还不好
+		    if(bNoMore)//Iterating 5 times is not good
 		    {
 			vbDiscarded[i]=true;// EPnP solution is not good, the matching effect is poor, and the candidate key frame is discarded
 			nCandidates--;
