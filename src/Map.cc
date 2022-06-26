@@ -33,8 +33,8 @@ void Map::EraseMapPoint(MapPoint *pMP)
 {
     unique_lock<mutex> lock(mMutexMap);
     
-  //      auto  it = mspMapPoints.find(pMP);// get pointer
-  //      delete *it;//delete
+  // auto  it = mspMapPoints.find(pMP);// get pointer
+  // delete *it;//delete
     
     mspMapPoints.erase(pMP);// pointer is deleted
 
@@ -48,8 +48,8 @@ void Map::EraseKeyFrame(KeyFrame *pKF)
     unique_lock<mutex> lock(mMutexMap);
     
 
-   //     auto  it = mspKeyFrames.find(pKF);// get pointer
-   //     delete *it;//delete
+   // auto  it = mspKeyFrames.find(pKF);// get pointer
+   // delete *it;//delete
     mspKeyFrames.erase(pKF);// pointer is deleted
 
     // TODO: This only erase the pointer.
