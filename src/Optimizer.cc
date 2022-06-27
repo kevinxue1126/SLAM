@@ -925,71 +925,71 @@ namespace ORB_SLAM2
 
 		if(e->chi2()>7.815 || !e->isDepthPositive())
 		{
-		    KeyFrame* pKFi = vpEdgeKFStereo[i];//边对应的 帧
-       // 步骤13.1：标记需要删除的边	    
-		    vToErase.push_back(make_pair(pKFi,pMP));//删除 这个边 
+		    KeyFrame* pKFi = vpEdgeKFStereo[i];//the frame corresponding to the edge
+       		    // Step 13.1: Mark the edges that need to be deleted 
+		    vToErase.push_back(make_pair(pKFi,pMP));//delete this edge 
 		}
 	    }
 	    
-       //步骤13.2 删除 误差较大的 边
-         // 连接偏差比较大，在关键帧中剔除对该MapPoint的观测
-         // 连接偏差比较大，在MapPoint中剔除对该关键帧的观测
+       	 // Step 13.2 delete edges with large errors
+         // The connection deviation is relatively large, and the observation of the MapPoint is eliminated in the key frame
+         // The connection deviation is relatively large, and the observation of this key frame is eliminated in MapPoint
 	 // Get Map Mutex
 	unique_lock<mutex> lock(pMap->mMutexMapUpdate);
 	if(!vToErase.empty())
 	{
 	    for(size_t i=0;i<vToErase.size();i++)
 	    {
-		KeyFrame* pKFi = vToErase[i].first;// 边对应的 帧
-		MapPoint* pMPi = vToErase[i].second;// 边对应的 地图点
-		pKFi->EraseMapPointMatch(pMPi);//帧 删除 地图点    观测
-		pMPi->EraseObservation(pKFi);// 地图点 删除 观测帧 观测
+		KeyFrame* pKFi = vToErase[i].first;// the frame corresponding to the edge
+		MapPoint* pMPi = vToErase[i].second;// The map point corresponding to the edge
+		pKFi->EraseMapPointMatch(pMPi);//frame delete map point observation
+		pMPi->EraseObservation(pKFi);// map point delete observation frame observation
 	    }
 	}
 
 	// Recover optimized data
-// 步骤14：优化后更新关键帧位姿以及MapPoints的位置、平均观测方向等属性
-     // 步骤14.1：优化后更新 关键帧 Keyframes
+	// Step 14: Update keyframe poses and attributes such as the location of MapPoints and the average observation direction after optimization
+        // Step 14.1：Optimized update Keyframes
 	// list<KeyFrame*>::iterator
 	for(auto  lit=lLocalKeyFrames.begin(), lend=lLocalKeyFrames.end(); lit!=lend; lit++)
 	{
-	    KeyFrame* pKF = *lit;//关键帧
+	    KeyFrame* pKF = *lit;// Keyframes
 	    g2o::VertexSE3Expmap* vSE3 = static_cast<g2o::VertexSE3Expmap*>(optimizer.vertex(pKF->mnId));
 	    g2o::SE3Quat SE3quat = vSE3->estimate();
 	    pKF->SetPose(Converter::toCvMat(SE3quat));
 	}
 
-     //步骤14.2：优化后 更新地图点 Points
+     	// Step 14.2：Optimized update map points
         // list<MapPoint*>::iterator
 	for(auto lit=lLocalMapPoints.begin(), lend=lLocalMapPoints.end(); lit!=lend; lit++)
 	{
-	    MapPoint* pMP = *lit;//地图点
+	    MapPoint* pMP = *lit;// map point
 	    g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(pMP->mnId + maxKFid+1));
-	    pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));//更新位置
-	    pMP->UpdateNormalAndDepth();// 更新 平均观测方向 深度
+	    pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));// update location
+	    pMP->UpdateNormalAndDepth();// Update the mean viewing direction depth
 	}
     }
 
     
-/**
- * @brief 闭环检测后，关键帧连接图 EssentialGraph 优化
- *
- * 1. Vertex:
- *     - g2o::VertexSim3Expmap ， Essential graph 中关键帧的位姿
- * 2. Edge:
- *     - g2o::EdgeSim3()，BaseBinaryEdge      基础二元边
- *         + Vertex： 关键帧的 位姿 Tcw， 地图点MapPoint的 位置 Pw
- *         + measurement：经过CorrectLoop函数步骤2，Sim3传播校正后的位姿
- *         + InfoMatrix: 单位矩阵     
- *
- * @param pMap                 全局地图
- * @param pLoopKF            闭环匹配上的关键帧
- * @param pCurKF              当前关键帧
- * @param NonCorrectedSim3    未经过Sim3传播调整过的关键帧 位姿 对
- * @param CorrectedSim3           经过Sim3传播调整过的关键帧 位姿 对
- * @param LoopConnections       因闭环时 MapPoints 调整而新生成的边
- * @param bFixScale                     固定尺度大小   
- */
+	/**
+	 * @brief After loop closure detection, the keyframe connection graph EssentialGraph is optimized
+	 *
+	 * 1. Vertex:
+	 *     - g2o::VertexSim3Expmap，Pose of keyframes in Essential graph
+	 * 2. Edge:
+	 *     - g2o::            EdgeSim3()，BaseBinaryEdge basic binary edge
+	 *         + Vertex：     The pose Tcw of the key frame, the position Pw of the map point MapPoint
+	 *         + measurement：After CorrectLoop function step 2, Sim3 propagates the corrected pose
+	 *         + InfoMatrix:  Identity matrix 
+	 *
+	 * @param pMap               global map
+	 * @param pLoopKF            keyframes on closed loop matching
+	 * @param pCurKF             current keyframe
+	 * @param NonCorrectedSim3   pairs of keyframe poses not adjusted by Sim3 propagation
+	 * @param CorrectedSim3      keyframe pose pairs adjusted by Sim3 propagation
+	 * @param LoopConnections    newly generated edges due to MapPoints adjustment when looping closed
+	 * @param bFixScale          fixed size   
+	 */
     void Optimizer::OptimizeEssentialGraph(
 					  Map* pMap, 
 					  KeyFrame* pLoopKF, 
@@ -998,133 +998,132 @@ namespace ORB_SLAM2
 					  const LoopClosing::KeyFrameAndPose &CorrectedSim3,
 					  const map<KeyFrame *, set<KeyFrame *> > &LoopConnections, const bool &bFixScale)
     {
-      
-// 步骤1：构造优化器      
-	// Setup optimizer
+           
+	// Step 1: Setup optimizer
 	g2o::SparseOptimizer optimizer;
 	optimizer.setVerbose(false);
-     // 步骤1.1：求解器类型   帧sim3位姿 spose 维度为 7  [sR t], 地图点  landmark 维度为 3
-	 //  指定线性方程求解器使用Eigen的块求解器
+     	// Step 1.1: Solver type frame sim3 pose spose dimension is 7[sR t], map point landmark dimension is 3
+	// Specify the linear equation solver to use Eigen's block solver
 	g2o::BlockSolver_7_3::LinearSolverType * linearSolver =
 	      new g2o::LinearSolverEigen<g2o::BlockSolver_7_3::PoseMatrixType>();
-     // 步骤1.2：构造线性求解器
+        // Step 1.2: Construct the Linear Solver
 	g2o::BlockSolver_7_3 * solver_ptr= new g2o::BlockSolver_7_3(linearSolver);
-     // 步骤1.3：迭代优化算法  
-	g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);// 使用LM算法进行非线性迭代
-	// g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr );// 高斯牛顿
-	// g2o::OptimizationAlgorithmDogleg* solver = new g2o::OptimizationAlgorithmDogleg( solver_ptr );//狗腿算法	
-     // 步骤1.4：设置优化器  	
+        // Step 1.3: Iterative Optimization Algorithm
+	g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);// Nonlinear Iteration Using LM Algorithm
+	// g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr );
+	// g2o::OptimizationAlgorithmDogleg* solver = new g2o::OptimizationAlgorithmDogleg( solver_ptr );
+        // Step 1.4: Set up the optimizer	
 	solver->setUserLambdaInit(1e-16);
 	optimizer.setAlgorithm(solver);
 
-	const vector<KeyFrame*> vpKFs = pMap->GetAllKeyFrames();//全局地图 的 所有 关键帧 
-	const vector<MapPoint*> vpMPs = pMap->GetAllMapPoints();//全局地图 的 所有 地图点
+	const vector<KeyFrame*> vpKFs = pMap->GetAllKeyFrames();//All keyframes of the global map
+	const vector<MapPoint*> vpMPs = pMap->GetAllMapPoints();//All map points of the global map
 
-	const unsigned int nMaxKFid = pMap->GetMaxKFid();//最大关键帧 id
-        // 仅经过Sim3传播调整，未经过优化的keyframe的pose
-	vector<g2o::Sim3,Eigen::aligned_allocator<g2o::Sim3> > vScw(nMaxKFid+1);// 存储 优化前 帧 的位姿
-	// 经过Sim3传播调整，经过优化的keyframe的pose
-	vector<g2o::Sim3,Eigen::aligned_allocator<g2o::Sim3> > vCorrectedSwc(nMaxKFid+1);//  存储 优化后 帧 的位姿
+	const unsigned int nMaxKFid = pMap->GetMaxKFid();//maximum keyframe id
+        // Pose of keyframe not optimized for Sim3 propagation adjustment only
+	vector<g2o::Sim3,Eigen::aligned_allocator<g2o::Sim3> > vScw(nMaxKFid+1);// Store the pose of the frame before optimization
+	// Optimized keyframe pose after Sim3 propagation adjustment
+	vector<g2o::Sim3,Eigen::aligned_allocator<g2o::Sim3> > vCorrectedSwc(nMaxKFid+1);//  Store the pose of the optimized frame
 	//  
-	vector<g2o::VertexSim3Expmap*> vpVertices(nMaxKFid+1);//保存g2o 顶点
+	vector<g2o::VertexSim3Expmap*> vpVertices(nMaxKFid+1);// save g2o vertices
 
 	const int minFeat = 100;
 	
-// 步骤2：将地图中所有keyframe的pose作为顶点添加到优化器
-         // 尽可能使用经过Sim3调整的位姿
-        // 关键帧顶点 Set KeyFrame vertices
+	 // Step 2: Add poses of all keyframes in the map as vertices to the optimizer
+         // Use Sim3-adjusted poses whenever possible
+        //  Set KeyFrame vertices
 	for(size_t i=0, iend=vpKFs.size(); i<iend;i++)
 	{
-	    KeyFrame* pKF = vpKFs[i];//关键帧
+	    KeyFrame* pKF = vpKFs[i];// keyframe
 	    if(pKF->isBad())
 		continue;
-	    g2o::VertexSim3Expmap* VSim3 = new g2o::VertexSim3Expmap();// 顶点类型 sim3 相似变换
-	    const int nIDi = pKF->mnId;//关键帧 id
-	    LoopClosing::KeyFrameAndPose::const_iterator it = CorrectedSim3.find(pKF);//查看该关键帧是否在 闭环优化帧内 
+	    g2o::VertexSim3Expmap* VSim3 = new g2o::VertexSim3Expmap();// Vertex type sim3 similarity transform
+	    const int nIDi = pKF->mnId;//keyframe id
+	    LoopClosing::KeyFrameAndPose::const_iterator it = CorrectedSim3.find(pKF);//Check if the keyframe is within the closed loop optimization frame
 	    
-       //步骤2.1： 如果该关键帧 在闭环时通过Sim3传播调整过，用校正后的位姿
+       	    // Step 2.1: If the keyframe is adjusted by Sim3 propagation during loop closure, use the corrected pose
 	    if(it != CorrectedSim3.end())
 	    {
-		vScw[nIDi] = it->second;// Sim3传播调整过的位姿 
-		VSim3->setEstimate(it->second);//设置 顶点初始 估计值
+		vScw[nIDi] = it->second;// Sim3 propagates adjusted poses
+		VSim3->setEstimate(it->second);//Set vertex initial estimates
 	    }
-       //步骤2.2： 如果该关键帧在闭环时没有通过Sim3传播调整过，用自身的位姿
+       	    // Step 2.2: If the keyframe is not adjusted by Sim3 propagation during loop closure, use its own pose
 	    else
 	    {
 		Eigen::Matrix<double,3,3> Rcw = Converter::toMatrix3d(pKF->GetRotation());
 		Eigen::Matrix<double,3,1> tcw = Converter::toVector3d(pKF->GetTranslation());
-		g2o::Sim3 Siw(Rcw,tcw,1.0);//设置体积估计尺度为1
-		vScw[nIDi] = Siw;//存储帧 对应的 sim3 位姿
-		VSim3->setEstimate(Siw);//设置 顶点初始 估计值
+		g2o::Sim3 Siw(Rcw,tcw,1.0);// Set the volume estimation scale to 1
+		vScw[nIDi] = Siw;// Store the sim3 pose corresponding to the frame
+		VSim3->setEstimate(Siw);// Set vertex initial estimates
 	    }
-       //步骤2.3： 闭环匹配上的帧不进行位姿优化
-	    if(pKF == pLoopKF)//  闭环匹配上的关键帧
-		VSim3->setFixed(true);// 固定不优化
+       	    // Step 2.3: Frames on closed loop matching are not subject to pose optimization
+	    if(pKF == pLoopKF)//  Keyframes on closed loop matching
+		VSim3->setFixed(true);// Fixed not optimized
 
-	    VSim3->setId(nIDi);//顶点id
-	    VSim3->setMarginalized(false);//
-	    VSim3->_fix_scale = bFixScale; // 固定尺度大小  
+	    VSim3->setId(nIDi);// vertex id
+	    VSim3->setMarginalized(false);
+	    VSim3->_fix_scale = bFixScale; // fixed size
 
-	    optimizer.addVertex(VSim3);// 添加 顶点
+	    optimizer.addVertex(VSim3);// add vertex
 
-	    vpVertices[nIDi]=VSim3;//保存顶点
+	    vpVertices[nIDi]=VSim3;// save vertex
 	}
 
 
 	set<pair<long unsigned int,long unsigned int> > sInsertedEdges;
-	const Eigen::Matrix<double,7,7> matLambda = Eigen::Matrix<double,7,7>::Identity();//信息矩阵
+	const Eigen::Matrix<double,7,7> matLambda = Eigen::Matrix<double,7,7>::Identity();// information matrix
 
 	// Set Loop edges
-// 步骤3：添加闭环新边( 帧 连接 帧 )：LoopConnections是闭环时因为MapPoints调整而出现的新关键帧连接关系（不是当前帧与闭环匹配帧之间的连接关系）	
-        //  遍历  因闭环时 MapPoints 调整而新生成的边
+	// Step 3: Add a new edge of the closed loop (frame connection frame): LoopConnections is a new keyframe connection relationship that appears due to MapPoints adjustment when the loop is closed (not the connection relationship between the current frame and the closed-loop matching frame)	
+        //  Traverse newly generated edges due to MapPoints adjustment when closing the loop
 	for(map<KeyFrame *, set<KeyFrame *> >::const_iterator mit = LoopConnections.begin(), mend=LoopConnections.end(); mit!=mend; mit++)
 	{
-	    KeyFrame* pKF = mit->first;//关键帧 
+	    KeyFrame* pKF = mit->first;// Keyframe
 	    const long unsigned int nIDi = pKF->mnId;//id
-	    const set<KeyFrame*> &spConnections = mit->second;// 与关键帧 相连的 关键帧
-	    const g2o::Sim3 Siw = vScw[nIDi];//顶点帧 位姿
-	    const g2o::Sim3 Swi = Siw.inverse();// 逆
+	    const set<KeyFrame*> &spConnections = mit->second;// keyframes linked to keyframes
+	    const g2o::Sim3 Siw = vScw[nIDi];//vertex frame pose
+	    const g2o::Sim3 Swi = Siw.inverse();// inverse
 
 	    for(set<KeyFrame*>::const_iterator sit=spConnections.begin(), send=spConnections.end(); sit != send; sit++)
 	    {
-		const long unsigned int nIDj = (*sit)->mnId;// 相连关键帧 id
+		const long unsigned int nIDj = (*sit)->mnId;// linked keyframe id
 		if((nIDi != pCurKF->mnId || nIDj != pLoopKF->mnId) && pKF->GetWeight(*sit) < minFeat)
 		    continue;
 
 		const g2o::Sim3 Sjw = vScw[nIDj];
-		// 得到两个pose间的Sim3变换
+		// Get the Sim3 transformation between two poses
 		const g2o::Sim3 Sji = Sjw * Swi;//
 
-		g2o::EdgeSim3* e = new g2o::EdgeSim3();// 边类型
+		g2o::EdgeSim3* e = new g2o::EdgeSim3();// edge type
 		e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(nIDj)));
 		e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(nIDi)));
-		e->setMeasurement(Sji);//测量值
+		e->setMeasurement(Sji);//Measurements
 
-		e->information() = matLambda;//信息矩阵
+		e->information() = matLambda;//information matrix
 
-		optimizer.addEdge(e);//添加边
+		optimizer.addEdge(e);//add edge
 
 		sInsertedEdges.insert(make_pair(min(nIDi,nIDj),max(nIDi,nIDj)));
 	    }
 	}
 
-// 步骤4：添加跟踪时形成的边、闭环匹配成功形成的边  Set normal edges
+	// Step 4: Add the edges formed during tracking and the edges formed successfully by closed-loop matching
 	for(size_t i=0, iend=vpKFs.size(); i<iend; i++)
 	{
-	    KeyFrame* pKF = vpKFs[i];// 关键帧
+	    KeyFrame* pKF = vpKFs[i];// Keyframe
 
 	    const int nIDi = pKF->mnId;
 
 	    g2o::Sim3 Swi;
 	    
-            // 尽可能得到未经过Sim3传播调整的位姿
+            // Get as many poses as possible without being adjusted by Sim3 propagation
 	    LoopClosing::KeyFrameAndPose::const_iterator iti = NonCorrectedSim3.find(pKF);
 	    if(iti != NonCorrectedSim3.end())
-		Swi = (iti->second).inverse();// 未经过Sim3传播调整的位姿
+		Swi = (iti->second).inverse();// Pose not adjusted by Sim3 propagation
 	    else
-		Swi = vScw[nIDi].inverse();//  经过Sim3传播调整的位姿
+		Swi = vScw[nIDi].inverse();//  Pose adjusted by Sim3 propagation
 		
-     // 步骤4.1： 父子边  只添加扩展树的边（有父关键帧） 父关键帧<----->关键帧
+     	    // Step 4.1: Parent-Child Edges Add only edges that expand the tree (with parent keyframes)  Parent keyframe <-----> keyframe
 	    KeyFrame* pParentKF = pKF->GetParent();
 	    // Spanning tree edge
 	    if(pParentKF)
@@ -1134,24 +1133,24 @@ namespace ORB_SLAM2
 		g2o::Sim3 Sjw;
 
 		LoopClosing::KeyFrameAndPose::const_iterator itj = NonCorrectedSim3.find(pParentKF);
-              // 尽可能得到未经过Sim3传播调整的位姿
+                // Get as many poses as possible without being adjusted by Sim3 propagation
 		if(itj!=NonCorrectedSim3.end())
-		    Sjw = itj->second;// 未经过Sim3传播调整的位姿
+		    Sjw = itj->second;// Pose not adjusted by Sim3 propagation
 		else
-		    Sjw = vScw[nIDj];//  经过Sim3传播调整的位姿
-               // 父子 位姿 变换 
+		    Sjw = vScw[nIDj];//  Pose adjusted by Sim3 propagation
+                // Father and son pose transform
 		g2o::Sim3 Sji = Sjw * Swi;
 
-		g2o::EdgeSim3* e = new g2o::EdgeSim3();// 普通边
+		g2o::EdgeSim3* e = new g2o::EdgeSim3();// normal side
 		e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(nIDj)));
 		e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(nIDi)));
 		e->setMeasurement(Sji);
-		e->information() = matLambda;// 信息矩阵 误差权重矩阵
-		optimizer.addEdge(e);//添加边
+		e->information() = matLambda;// information matrix  error weight matrix
+		optimizer.addEdge(e);// add edge
 	    }
 	    
-     // 步骤4.2：关键帧<---->闭环帧 添加在CorrectLoop函数中AddLoopEdge函数添加的闭环连接边（当前帧与闭环匹配帧之间的连接关系）
-            // 使用经过Sim3调整前关键帧之间的相对关系作为边
+     	    // Step 4.2: Key frame <----> closed loop frame Add the closed loop connection edge added by the AddLoopEdge function in the CorrectLoop function (the connection relationship between the current frame and the closed loop matching frame)
+            // Use the relative relationship between the keyframes before the Sim3 adjustment as the edge
 	    // Loop edges
 	    const set<KeyFrame*> sLoopEdges = pKF->GetLoopEdges();
 	    for(set<KeyFrame*>::const_iterator sit=sLoopEdges.begin(), send=sLoopEdges.end(); sit!=send; sit++)
@@ -1162,7 +1161,7 @@ namespace ORB_SLAM2
 		    g2o::Sim3 Slw;
 
 		    LoopClosing::KeyFrameAndPose::const_iterator itl = NonCorrectedSim3.find(pLKF);
-                   // 尽可能得到未经过Sim3传播调整的位姿
+                   // Get as many poses as possible without being adjusted by Sim3 propagation
 		    if(itl!=NonCorrectedSim3.end())
 			Slw = itl->second;
 		    else
