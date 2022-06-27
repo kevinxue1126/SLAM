@@ -1426,22 +1426,22 @@ namespace ORB_SLAM2
 	    rk1->setDelta(deltaHuber);
 	    optimizer.addEdge(e12);
 	    
-       // 步骤4.2 ：添加 帧1 地图点 映射到 帧2特征点 的 边
+       	     // Step 4.2: Add the edges that map the frame 1 map points to the frame 2 feature points
 	    // Set edge x2 = S21*X1
 	    Eigen::Matrix<double,2,1> obs2;
 	    const cv::KeyPoint &kpUn2 = pKF2->mvKeysUn[i2];
-	    obs2 << kpUn2.pt.x, kpUn2.pt.y;// 帧2 特征点 的 实际值
+	    obs2 << kpUn2.pt.x, kpUn2.pt.y;// The actual value of the feature point in frame 2
 
 	    g2o::EdgeInverseSim3ProjectXYZ* e21 = new g2o::EdgeInverseSim3ProjectXYZ();
 
-	    e21->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id1)));// 帧1 地图点
-	    e21->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));// 帧2 到 帧1 变换顶点
-	    e21->setMeasurement(obs2);// 帧2 特征点 的 实际值
+	    e21->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id1)));// frame 1 map point
+	    e21->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));// frame 2 to frame 1 transform vertices
+	    e21->setMeasurement(obs2);// The actual value of the feature point in frame 2
 	    float invSigmaSquare2 = pKF2->mvInvLevelSigma2[kpUn2.octave];
 	    e21->setInformation(Eigen::Matrix2d::Identity()*invSigmaSquare2);
 
 	    g2o::RobustKernelHuber* rk2 = new g2o::RobustKernelHuber;
-	    e21->setRobustKernel(rk2);// 核函数
+	    e21->setRobustKernel(rk2);// Kernel function
 	    rk2->setDelta(deltaHuber);
 	    optimizer.addEdge(e21);
 
@@ -1451,14 +1451,14 @@ namespace ORB_SLAM2
 	}
 	
 
-// 步骤5：g2o开始优化，先迭代5次	 
+	// Step 5: g2o starts to optimize, iterates 5 times first
 	optimizer.initializeOptimization();
 	optimizer.optimize(5);
 
 
-// 步骤6：剔除一些误差大的边
-    // Check inliers
-    // 进行卡方检验，大于阈值的边剔除
+	// Step 6: Eliminate some edges with large errors
+        // Check inliers
+    	// Perform a chi-square test and remove edges greater than the threshold
 	int nBad=0;
 	for(size_t i=0; i<vpEdges12.size();i++)
 	{
@@ -1467,11 +1467,11 @@ namespace ORB_SLAM2
 	    if(!e12 || !e21)
 		continue;
 
-	    if(e12->chi2() > th2 || e21->chi2() > th2)// 误差较大 边噪声大
+	    if(e12->chi2() > th2 || e21->chi2() > th2)// big error side noise
 	    {
 		size_t idx = vnIndexEdge[i];
 		vpMatches1[idx]=static_cast<MapPoint*>(NULL);
-		optimizer.removeEdge(e12);// 移除边
+		optimizer.removeEdge(e12);// remove edge
 		optimizer.removeEdge(e21);
 		vpEdges12[i]=static_cast<g2o::EdgeSim3ProjectXYZ*>(NULL);
 		vpEdges21[i]=static_cast<g2o::EdgeInverseSim3ProjectXYZ*>(NULL);
@@ -1481,18 +1481,18 @@ namespace ORB_SLAM2
 
 	int nMoreIterations;
 	if(nBad > 0)
-	    nMoreIterations=10;//除去外点后 再迭代10次
+	    nMoreIterations=10;// Iterate 10 times after removing outliers
 	else
 	    nMoreIterations=5;
 
 	if(nCorrespondences - nBad < 10)
 	    return 0;
-// 步骤7：再次g2o优化剔除误差大的边后剩下的边
+	// Step 7: Re-g2o optimizes the remaining edges after removing the edges with large errors
 	// Optimize again only with inliers
 	optimizer.initializeOptimization();
 	optimizer.optimize(nMoreIterations);
 	
-// 步骤8：再次进行卡方检验，统计 除去误差较大后的 内点个数
+	// Step 8: Perform the chi-square test again, and count the number of inliers after removing the larger error
 	int nIn = 0;
 	for(size_t i=0; i<vpEdges12.size();i++)
 	{
@@ -1501,16 +1501,16 @@ namespace ORB_SLAM2
 	    if(!e12 || !e21)
 		continue;
 
-	    if(e12->chi2()>th2 || e21->chi2()>th2)// 误差较大
+	    if(e12->chi2()>th2 || e21->chi2()>th2)// big error
 	    {
 		size_t idx = vnIndexEdge[i];
 		vpMatches1[idx]=static_cast<MapPoint*>(NULL);
 	    }
 	    else
-		nIn++;//内点个数
+		nIn++;//number of interior points
 	}
 	
-// 步骤9：得到优化后的结果
+	// Step 9: Get the optimized result
 	// Recover optimized Sim3
 	g2o::VertexSim3Expmap* vSim3_recov = static_cast<g2o::VertexSim3Expmap*>(optimizer.vertex(0));
 	g2oS12= vSim3_recov->estimate();
