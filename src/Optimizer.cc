@@ -1218,7 +1218,7 @@ namespace ORB_SLAM2
 	// Step 5: Start g2o optimization
 	// Optimize!
 	optimizer.initializeOptimization();
-	optimizer.optimize(20);//优化20次
+	optimizer.optimize(20);//Optimize 20 times
 
 	unique_lock<mutex> lock(pMap->mMutexMapUpdate);
 
@@ -1260,101 +1260,100 @@ namespace ORB_SLAM2
 	    {
 	        // The reference keyframe of the MapPoint is the keyframe that created the MapPoint.
 		KeyFrame* pRefKF = pMP->GetReferenceKeyFrame();
-		nIDr = pRefKF->mnId;// 地图点的 参考帧 id
+		nIDr = pRefKF->mnId;// The reference frame id of the map point
 	    }
 
-             // 得到MapPoint参考关键帧步骤5优化前的位姿
-	    g2o::Sim3 Srw = vScw[nIDr];// 地图点参考帧 优化前的 位姿
-	     // 得到MapPoint参考关键帧优化后的位姿
-	    g2o::Sim3 correctedSwr = vCorrectedSwc[nIDr];// 地图点参考帧 优化后的 位姿
+             // Get the pose of the MapPoint reference key frame step 5 before optimization
+	    g2o::Sim3 Srw = vScw[nIDr];// Pose of map point reference frame before optimization
+	     // Get the optimized pose of the MapPoint reference keyframe
+	    g2o::Sim3 correctedSwr = vCorrectedSwc[nIDr];// The optimized pose of the map point reference frame
 
-	    cv::Mat P3Dw = pMP->GetWorldPos();// 地图点 原坐标
-	    Eigen::Matrix<double,3,1> eigP3Dw = Converter::toVector3d(P3Dw);//转成 eigen
-	    // 先按优化前位姿从世界坐标系 转到 当前帧下 再按 优化后的位姿 转到世界坐标系下
+	    cv::Mat P3Dw = pMP->GetWorldPos();// map point original coordinates
+	    Eigen::Matrix<double,3,1> eigP3Dw = Converter::toVector3d(P3Dw);// transform eigen
+	    // First move from the world coordinate system to the current frame according to the pose before optimization, and then move to the world coordinate system according to the optimized pose
 	    Eigen::Matrix<double,3,1> eigCorrectedP3Dw = correctedSwr.map(Srw.map(eigP3Dw));
 
-	    cv::Mat cvCorrectedP3Dw = Converter::toCvMat(eigCorrectedP3Dw);//转成opencv mat
-	    pMP->SetWorldPos(cvCorrectedP3Dw);//设置更新后的 坐标
-	    pMP->UpdateNormalAndDepth();// 更新 地图点  平均观测方向 深度
+	    cv::Mat cvCorrectedP3Dw = Converter::toCvMat(eigCorrectedP3Dw);// transform opencv mat
+	    pMP->SetWorldPos(cvCorrectedP3Dw);//Set the updated coordinates
+	    pMP->UpdateNormalAndDepth();// update map point mean viewing direction depth
 	}
     }
     
-/**
- * @brief 形成闭环时进行Sim3优化   优化 两个关键帧 之间的 Sim3变换
- *
- * 1. 顶点 Vertex:
- *     - g2o::VertexSim3Expmap()，两个关键帧的位姿
- *     - g2o::VertexSBAPointXYZ()，两个关键帧共有的MapPoints
- * 
- * 2. 边 Edge:
- *     - g2o::EdgeSim3ProjectXYZ()，BaseBinaryEdge
- *         + Vertex：关键帧的Sim3，MapPoint的Pw
- *         + measurement：MapPoint在关键帧中的二维位置(u,v)
- *         + InfoMatrix: invSigma2(与特征点所在的尺度有关)
- * 
- *     - g2o::EdgeInverseSim3ProjectXYZ()，BaseBinaryEdge
- *         + Vertex：关键帧的Sim3，MapPoint的Pw
- *         + measurement：MapPoint在关键帧中的二维位置(u,v)
- *         + InfoMatrix: invSigma2(与特征点所在的尺度有关)
- *         
- * @param pKF1        KeyFrame
- * @param pKF2        KeyFrame
- * @param vpMatches1  两个关键帧的匹配关系
- * @param g2oS12          两个关键帧间的Sim3变换
- * @param th2                 核函数阈值
- * @param bFixScale       是否优化尺度，弹目进行尺度优化，双目不进行尺度优化
- */
+	/**
+	 * @brief Sim3 optimization when forming closed loop   Optimize Sim3 transform between two keyframes
+	 *
+	 * 1. Vertex:
+	 *     - g2o::VertexSim3Expmap()，The pose of the two keyframes
+	 *     - g2o::VertexSBAPointXYZ()，MapPoints common to both keyframes
+	 * 
+	 * 2. Edge:
+	 *     - g2o::EdgeSim3ProjectXYZ()，BaseBinaryEdge
+	 *         + Vertex：Sim3 for keyframes, Pw for MapPoint
+	 *         + measurement：The 2D position of the MapPoint in the keyframe (u, v)
+	 *         + InfoMatrix: invSigma2(It is related to the scale where the feature points are located)
+	 * 
+	 *     - g2o::EdgeInverseSim3ProjectXYZ()，BaseBinaryEdge
+	 *         + Vertex：Sim3 for keyframes, Pw for MapPoint
+	 *         + measurement：The 2D position of the MapPoint in the keyframe (u, v)
+	 *         + InfoMatrix: invSigma2(It is related to the scale where the feature points are located)
+	 *         
+	 * @param pKF1        KeyFrame
+	 * @param pKF2        KeyFrame
+	 * @param vpMatches1  Matching relationship between two keyframes
+	 * @param g2oS12      Sim3 transform between two keyframes
+	 * @param th2         Kernel function threshold
+	 * @param bFixScale   Whether to optimize the scale, the bullet is optimized for scale, and the binocular is not optimized for scale
+	 */
     int Optimizer::OptimizeSim3(KeyFrame *pKF1, KeyFrame *pKF2, vector<MapPoint *> &vpMatches1, g2o::Sim3 &g2oS12, const float th2, const bool bFixScale)
     {
-// 步骤1：初始化g2o优化器
-     // 先构造求解器
+	// Step 1: Initialize the g2o optimizer
+        // Build the solver first
 	g2o::SparseOptimizer optimizer;
-     // 构造线性方程求解器，Hx = -b的求解器
+        // Construct a linear equation solver, a solver for Hx = -b
 	// typedef BlockSolver< BlockSolverTraits<Eigen::Dynamic, Eigen::Dynamic> > BlockSolverX
 	g2o::BlockSolverX::LinearSolverType * linearSolver;
-     // 使用dense的求解器，（常见非dense求解器有cholmod线性求解器和shur补线性求解器）
+        // Solver using dense, (common non-dense solvers include cholmod linear solver and shur complement linear solver)
 	linearSolver = new g2o::LinearSolverDense<g2o::BlockSolverX::PoseMatrixType>();
 	g2o::BlockSolverX * solver_ptr = new g2o::BlockSolverX(linearSolver);
-     // 使用 L-M 迭代   迭代优化算法  
-	g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);// 使用LM算法进行非线性迭代
-	// g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr );// 高斯牛顿
-	// g2o::OptimizationAlgorithmDogleg* solver = new g2o::OptimizationAlgorithmDogleg( solver_ptr );//狗腿算法	
-     //  设置优化器  	
+        // Iteration using L-M   Iterative optimization algorithm
+	g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);// Nonlinear Iteration Using LM Algorithm
+	// g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr );// Gauss Newton
+	// g2o::OptimizationAlgorithmDogleg* solver = new g2o::OptimizationAlgorithmDogleg( solver_ptr );// dogleg algorithm	
+        //  set optimizer	
 	optimizer.setAlgorithm(solver);
 
-	// 相机内参数 Calibration
+	// In-camera parameters Calibration
 	const cv::Mat &K1 = pKF1->mK;
 	const cv::Mat &K2 = pKF2->mK;
 
-	// 相机位姿 Camera poses
+	// Camera poses
 	const cv::Mat R1w = pKF1->GetRotation();
 	const cv::Mat t1w = pKF1->GetTranslation();
 	const cv::Mat R2w = pKF2->GetRotation();
 	const cv::Mat t2w = pKF2->GetTranslation();
 	
-// 步骤2：添加相似Sim3顶点
+	// Step 2: Add Similar Sim3 Vertices
 	// Set Sim3 vertex
-	g2o::VertexSim3Expmap * vSim3 = new g2o::VertexSim3Expmap();  // sim3 顶点类型
+	g2o::VertexSim3Expmap * vSim3 = new g2o::VertexSim3Expmap();  // sim3 vertex type
 	vSim3->_fix_scale=bFixScale;
-	vSim3->setEstimate(g2oS12);// 初始估计值 两帧 之间的 相似变换
+	vSim3->setEstimate(g2oS12);// Similarity transformation between two frames of initial estimates
 	vSim3->setId(0);//id
-	vSim3->setFixed(false);// 优化Sim3顶点
-	vSim3->_principle_point1[0] = K1.at<float>(0,2);// 光心横坐标 cx
-	vSim3->_principle_point1[1] = K1.at<float>(1,2);// 光心纵坐标 cy
-	vSim3->_focal_length1[0] = K1.at<float>(0,0);// 焦距 fx
-	vSim3->_focal_length1[1] = K1.at<float>(1,1);// 焦距 fy
+	vSim3->setFixed(false);// Optimize Sim3 Vertices
+	vSim3->_principle_point1[0] = K1.at<float>(0,2);// Optical center abscissa cx
+	vSim3->_principle_point1[1] = K1.at<float>(1,2);// Optical center ordinate cy
+	vSim3->_focal_length1[0] = K1.at<float>(0,0);// focal length fx
+	vSim3->_focal_length1[1] = K1.at<float>(1,1);// focal length fy
 	vSim3->_principle_point2[0] = K2.at<float>(0,2);
 	vSim3->_principle_point2[1] = K2.at<float>(1,2);
 	vSim3->_focal_length2[0] = K2.at<float>(0,0);
 	vSim3->_focal_length2[1] = K2.at<float>(1,1);
-	optimizer.addVertex(vSim3);// 添加顶点
+	optimizer.addVertex(vSim3);// add vertex
 	
-// 步骤3 ：添加 地图点 顶点
-       // Set MapPoint vertices
-	const int N = vpMatches1.size();// 帧2 的匹配地图点
+       // Step 3: Set MapPoint vertices
+	const int N = vpMatches1.size();// Matching map points for frame 2
 	const vector<MapPoint*> vpMapPoints1 = pKF1->GetMapPointMatches();
-	vector<g2o::EdgeSim3ProjectXYZ*> vpEdges12;             //pKF2对应的MapPoints到pKF1的投影
-	vector<g2o::EdgeInverseSim3ProjectXYZ*> vpEdges21;//pKF1对应的MapPoints到pKF2的投影
+	vector<g2o::EdgeSim3ProjectXYZ*> vpEdges12;             // Projection of MapPoints corresponding to pKF2 to pKF1
+	vector<g2o::EdgeInverseSim3ProjectXYZ*> vpEdges21;// Projection of MapPoints corresponding to pKF1 to pKF2
 	vector<size_t> vnIndexEdge;
 
 	vnIndexEdge.reserve(2*N);
@@ -1370,9 +1369,9 @@ namespace ORB_SLAM2
 	    if(!vpMatches1[i])
 		continue;
 	    
-            // pMP1和pMP2是匹配的MapPoints
-	    MapPoint* pMP1 = vpMapPoints1[i];// 帧1 地图点
-	    MapPoint* pMP2 = vpMatches1[i];    // 帧2 地图点
+            // pMP1 and pMP2 are matching MapPoints
+	    MapPoint* pMP1 = vpMapPoints1[i];  // frame 1 map point
+	    MapPoint* pMP2 = vpMatches1[i];    // frame 2 map point
 
 	    const int id1 = 2*i+1;
 	    const int id2 = 2*(i+1);
@@ -1383,20 +1382,20 @@ namespace ORB_SLAM2
 	    {
 		if(!pMP1->isBad() && !pMP2->isBad() && i2>=0)
 		{
-      // 步骤3.1 添加PointXYZ顶点		  
+      		    // Step 3.1 Add PointXYZ vertices		  
 		    g2o::VertexSBAPointXYZ* vPoint1 = new g2o::VertexSBAPointXYZ();
 		    cv::Mat P3D1w = pMP1->GetWorldPos();
 		    cv::Mat P3D1c = R1w*P3D1w + t1w;
-		    vPoint1->setEstimate(Converter::toVector3d(P3D1c));// 帧1 下的点坐标
-		    vPoint1->setId(id1);// 帧1  地图点
+		    vPoint1->setEstimate(Converter::toVector3d(P3D1c));// Point coordinates under frame 1
+		    vPoint1->setId(id1);// frame 1 map point
 		    vPoint1->setFixed(true);
 		    optimizer.addVertex(vPoint1);
 
 		    g2o::VertexSBAPointXYZ* vPoint2 = new g2o::VertexSBAPointXYZ();
 		    cv::Mat P3D2w = pMP2->GetWorldPos();
 		    cv::Mat P3D2c = R2w*P3D2w + t2w;
-		    vPoint2->setEstimate(Converter::toVector3d(P3D2c));// 帧2下的点坐标
-		    vPoint2->setId(id2);// 帧2 地图点
+		    vPoint2->setEstimate(Converter::toVector3d(P3D2c));// Point coordinates under frame 2
+		    vPoint2->setId(id2);// frame 2 map point
 		    vPoint2->setFixed(true);
 		    optimizer.addVertex(vPoint2);
 		}
@@ -1408,22 +1407,22 @@ namespace ORB_SLAM2
 
 	    nCorrespondences++;
 	    
-// 步骤4 ： 添加两个顶点（3D点）到相机投影的边
-       // 步骤4.1 ：添加 帧2 地图点 映射到 帧1特征点 的 边
+	    // Step 4: Add two vertices (3D points) to the edges of the camera projection
+            // Step 4.1: Add frame 2 map points, which map to the edges of frame 1 feature points
 	    // Set edge x1 = S12*X2
 	    Eigen::Matrix<double,2,1> obs1;
 	    const cv::KeyPoint &kpUn1 = pKF1->mvKeysUn[i];
-	    obs1 << kpUn1.pt.x, kpUn1.pt.y;// 帧1 特征点 的 实际值
+	    obs1 << kpUn1.pt.x, kpUn1.pt.y;// The actual value of the feature point in frame 1
 	    
-	    g2o::EdgeSim3ProjectXYZ* e12 = new g2o::EdgeSim3ProjectXYZ();// 边类型
-	    e12->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id2)));// 帧2 地图点
-	    e12->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));// 帧2 到 帧1 变换顶点
-	    e12->setMeasurement(obs1);// 帧1 特征点 的 实际值
+	    g2o::EdgeSim3ProjectXYZ* e12 = new g2o::EdgeSim3ProjectXYZ();// edge type
+	    e12->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id2)));// frame 2 map point
+	    e12->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(0)));// frame 2 to frame 1 transform vertices
+	    e12->setMeasurement(obs1);// The actual value of the feature point in frame 1
 	    const float &invSigmaSquare1 = pKF1->mvInvLevelSigma2[kpUn1.octave];
-	    e12->setInformation(Eigen::Matrix2d::Identity()*invSigmaSquare1);// 信息矩阵 误差权重矩阵
+	    e12->setInformation(Eigen::Matrix2d::Identity()*invSigmaSquare1);// information matrix  error weight matrix
 
 	    g2o::RobustKernelHuber* rk1 = new g2o::RobustKernelHuber;
-	    e12->setRobustKernel(rk1);// 核函数
+	    e12->setRobustKernel(rk1);// kernel function
 	    rk1->setDelta(deltaHuber);
 	    optimizer.addEdge(e12);
 	    
