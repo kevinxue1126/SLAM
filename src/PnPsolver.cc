@@ -1,14 +1,14 @@
 /**
-//这里的pnp求解用的是EPnP的算法。
-// 参考论文：EPnP:An Accurate O(n) Solution to the PnP problem
+// The pnp solution here uses the EPnP algorithm.
+// Reference papers：EPnP:An Accurate O(n) Solution to the PnP problem
 // https://en.wikipedia.org/wiki/Perspective-n-Point
 // http://docs.ros.org/fuerte/api/re_vision/html/classepnp.html
-// 如果不理解，可以看看中文的："摄像机位姿的高精度快速求解" "摄像头位姿的加权线性算法"
+// If you don't understand, you can look at the Chinese: "High-precision and fast solution of camera pose" "Weighted linear algorithm for camera pose"
 
-// PnP求解：已知世界坐标系下的3D点与图像坐标系对应的2D点，求解相机的外参(R t)，即从世界坐标系到相机坐标系的变换。
-// 而EPnP的思想是：
-// 将世界坐标系所有的3D点用四个虚拟的控制点来表示，将图像上对应的特征点转化为相机坐标系下的四个控制点
-// 根据世界坐标系下的四个控制点与相机坐标系下对应的四个控制点（与世界坐标系下四个控制点有相同尺度）即可恢复出(R t)
+// PnP solution: Knowing the 3D point in the world coordinate system and the 2D point corresponding to the image coordinate system, solve the external parameter (R t) of the camera, that is, the transformation from the world coordinate system to the camera coordinate system.
+// The idea of EPnP is:
+// All 3D points in the world coordinate system are represented by four virtual control points, and the corresponding feature points on the image are converted into four control points in the camera coordinate system
+// (R t) can be recovered according to the four control points in the world coordinate system and the corresponding four control points in the camera coordinate system (the same scale as the four control points in the world coordinate system).
 
 
 //                                                          |x|
@@ -16,22 +16,22 @@
 // s |v| = |0  fy v0||r21 r22 r23 t2||z|
 //    |1|    |0  0  1 ||r32 r32 r33 t3| |1|
 
-// step1:用四个控制点来表达所有的3D点
-// p_w = sigma(alphas_j * pctrl_w_j), j从0到4
-// p_c = sigma(alphas_j * pctrl_c_j), j从0到4
-// sigma(alphas_j) = 1,  j从0到4
+// step1: Express all 3D points with four control points
+// p_w = sigma(alphas_j * pctrl_w_j), j from 0 to 4
+// p_c = sigma(alphas_j * pctrl_c_j), j from 0 to 4
+// sigma(alphas_j) = 1,  j from 0 to 4
 
-// step2:根据针孔投影模型
-// s * u = K * sigma(alphas_j * pctrl_c_j), j从0到4
+// step2: According to the pinhole projection model
+// s * u = K * sigma(alphas_j * pctrl_c_j), j from 0 to 4
 
-// step3:将step2的式子展开, 消去s
+// step3: Expand the expression of step2 and remove s
 // sigma(alphas_j * fx * Xctrl_c_j) + alphas_j * (u0-u)*Zctrl_c_j = 0
 // sigma(alphas_j * fy * Xctrl_c_j) + alphas_j * (v0-u)*Zctrl_c_j = 0
 
-// step4:将step3中的12未知参数（4个控制点*3维参考点坐标）提成列向量
-// Mx = 0,计算得到初始的解x后可以用Gauss-Newton来提纯得到四个相机坐标系的控制点
+// step4: Extract the 12 unknown parameters in step3 (4 control points * 3-dimensional reference point coordinates) into column vectors
+// Mx = 0, After calculating the initial solution x, Gauss-Newton can be used to purify the control points of the four camera coordinate systems
 
-// step5:根据得到的p_w和对应的p_c，最小化重投影误差即可求解出R t
+// step5: According to the obtained p_w and corresponding p_c, R t can be solved by minimizing the reprojection error
 
 
 */
@@ -51,15 +51,15 @@ using namespace std;
 namespace ORB_SLAM2
 {
 
-// pcs表示3D点在camera坐标系下的坐标
-// pws表示3D点在世界坐标系下的坐标
-// us表示图像坐标系下的2D点坐标
-// alphas为真实3D点用4个虚拟控制点表达时的系数
+// pcs represents the coordinates of the 3D point in the camera coordinate system
+// pws represents the coordinates of the 3D point in the world coordinate system
+// us represents the 2D point coordinates in the image coordinate system
+// alphas is the coefficient when the real 3D point is expressed by 4 virtual control points
 PnPsolver::PnPsolver(const Frame &F, const vector<MapPoint*> &vpMapPointMatches):
     pws(0), us(0), alphas(0), pcs(0), maximum_number_of_correspondences(0), number_of_correspondences(0), mnInliersi(0),
     mnIterations(0), mnBestInliers(0), N(0)
 {
-  // 根据点数初始化容器的大小
+    // Initialize the size of the container according to the number of points
     mvpMapPointMatches = vpMapPointMatches;
     mvP2D.reserve(F.mvpMapPoints.size());
     mvSigma2.reserve(F.mvpMapPoints.size());
@@ -70,22 +70,22 @@ PnPsolver::PnPsolver(const Frame &F, const vector<MapPoint*> &vpMapPointMatches)
     int idx=0;
     for(size_t i=0, iend=vpMapPointMatches.size(); i<iend; i++)
     {
-        MapPoint* pMP = vpMapPointMatches[i];//依次获取一个MapPoint
+        MapPoint* pMP = vpMapPointMatches[i];// Get a MapPoint in turn
 
         if(pMP)
         {
             if(!pMP->isBad())
             {
-                const cv::KeyPoint &kp = F.mvKeysUn[i];//得到2维特征点, 将KeyPoint类型变为Point2f
+                const cv::KeyPoint &kp = F.mvKeysUn[i];// Get 2-dimensional feature points, change the KeyPoint type to Point2f
 
-                mvP2D.push_back(kp.pt);//存放到mvP2D容器
-                mvSigma2.push_back(F.mvLevelSigma2[kp.octave]);//记录特征点是在哪一层提取出来的
+                mvP2D.push_back(kp.pt);// Stored in mvP2D container
+                mvSigma2.push_back(F.mvLevelSigma2[kp.octave]);// Record the layer in which the feature points are extracted
 
-                cv::Mat Pos = pMP->GetWorldPos();//世界坐标系下的3D点
+                cv::Mat Pos = pMP->GetWorldPos();// 3D point in world coordinate system
                 mvP3Dw.push_back(cv::Point3f(Pos.at<float>(0),Pos.at<float>(1), Pos.at<float>(2)));
 
-                mvKeyPointIndices.push_back(i);//记录被使用特征点在原始特征点容器中的索引, mvKeyPointIndices是跳跃的
-                mvAllIndices.push_back(idx); //记录被使用特征点的索引, mvAllIndices是连续的              
+                mvKeyPointIndices.push_back(i);// Record the index of the used feature point in the original feature point container, mvKeyPointIndices is skipped
+                mvAllIndices.push_back(idx); // Record the index of the feature point used, mvAllIndices is continuous         
 
                 idx++;
             }
@@ -110,7 +110,7 @@ PnPsolver::~PnPsolver()
 }
 
 
-// 设置RANSAC迭代的参数
+// Set parameters for RANSAC iteration
 void PnPsolver::SetRansacParameters(double probability, int minInliers, int maxIterations, int minSet, float epsilon, float th2)
 {
     mRansacProb = probability;
@@ -119,12 +119,12 @@ void PnPsolver::SetRansacParameters(double probability, int minInliers, int maxI
     mRansacEpsilon = epsilon;
     mRansacMinSet = minSet;
 
-    N = mvP2D.size(); // number of correspondences 所有二维特征点个数
+    N = mvP2D.size(); // number of correspondences The number of all 2D feature points
 
-    mvbInliersi.resize(N);// inlier index, mvbInliersi记录每次迭代inlier的点
+    mvbInliersi.resize(N);// inlier index, mvbInliersi Record the points of each iteration inlier
 
     // Adjust Parameters according to number of correspondences
-    int nMinInliers = N*mRansacEpsilon;// RANSAC的残差
+    int nMinInliers = N*mRansacEpsilon;// Residuals of RANSAC
     if(nMinInliers<mRansacMinInliers)
         nMinInliers=mRansacMinInliers;
     if(nMinInliers<minSet)
@@ -137,15 +137,15 @@ void PnPsolver::SetRansacParameters(double probability, int minInliers, int maxI
     // Set RANSAC iterations according to probability, epsilon, and max iterations
     int nIterations;
 
-    if(mRansacMinInliers==N)//根据期望的残差大小来计算RANSAC需要迭代的次数
+    if(mRansacMinInliers==N)// Calculate the number of iterations required for RANSAC based on the expected residual size
         nIterations=1;
     else
         nIterations = ceil(log(1-mRansacProb)/log(1-pow(mRansacEpsilon,3)));
 
     mRansacMaxIts = max(1,min(nIterations,mRansacMaxIts));
 
-    mvMaxError.resize(mvSigma2.size());// 图像提取特征的时候尺度层数
-    for(size_t i=0; i<mvSigma2.size(); i++)// 不同的尺度，设置不同的最大偏差
+    mvMaxError.resize(mvSigma2.size());// The number of scale layers when extracting features from images
+    for(size_t i=0; i<mvSigma2.size(); i++)// Different scales, set different maximum deviations
         mvMaxError[i] = mvSigma2[i]*th2;
 }
 
@@ -161,18 +161,18 @@ cv::Mat PnPsolver::iterate(int nIterations, bool &bNoMore, vector<bool> &vbInlie
     vbInliers.clear();
     nInliers=0;
     
-// mRansacMinSet为每次RANSAC需要的特征点数，默认为4组3D-2D对应点
+    // mRansacMinSet is the number of feature points required for each RANSAC, the default is 4 sets of 3D-2D corresponding points
     set_maximum_number_of_correspondences(mRansacMinSet);
     
- // N为所有2D点的个数, mRansacMinInliers为RANSAC迭代过程中最少的inlier数
+    // N is the number of all 2D points, mRansacMinInliers is the minimum number of inliers in the iterative process of RANSAC
     if(N<mRansacMinInliers)
     {
         bNoMore = true;
         return cv::Mat();
     }
     
-    // mvAllIndices为所有参与PnP的2D点的索引
-    // vAvailableIndices为每次从mvAllIndices中随机挑选mRansacMinSet组3D-2D对应点进行一次RANSAC
+    // mvAllIndices is the index of all 2D points participating in PnP
+    // vAvailableIndices performs a RANSAC for each random selection of mRansacMinSet group 3D-2D corresponding points from mvAllIndices
     vector<size_t> vAvailableIndices;
 
     int nCurrentIterations = 0;
@@ -190,7 +190,7 @@ cv::Mat PnPsolver::iterate(int nIterations, bool &bNoMore, vector<bool> &vbInlie
             int randi = DUtils::Random::RandomInt(0, vAvailableIndices.size()-1);
 
             int idx = vAvailableIndices[randi];
-            // 将对应的3D-2D压入到pws和us
+            // Press the corresponding 3D-2D into pws and us
             add_correspondence(mvP3Dw[idx].x,mvP3Dw[idx].y,mvP3Dw[idx].z,mvP2D[idx].x,mvP2D[idx].y);
 
             vAvailableIndices[randi] = vAvailableIndices.back();
@@ -282,7 +282,7 @@ bool PnPsolver::Refine()
 
     // Check inliers
     CheckInliers();
-// 通过CheckInliers函数得到那些inlier点用来提纯
+    // Get those inlier points through the CheckInliers function for purification
     mnRefinedInliers =mnInliersi;
     mvbRefinedInliers = mvbInliersi;
 
@@ -301,7 +301,7 @@ bool PnPsolver::Refine()
     return false;
 }
 
-// 通过之前求解的(R t)检查哪些3D-2D点对属于inliers
+// Check which 3D-2D point pairs belong to inliers by the previously solved (R t)
 void PnPsolver::CheckInliers()
 {
     mnInliersi=0;
@@ -335,10 +335,10 @@ void PnPsolver::CheckInliers()
     }
 }
 
-// number_of_correspondences为RANSAC每次PnP求解时时3D点和2D点匹配对数
-// RANSAC需要很多次，maximum_number_of_correspondences为匹配对数最大值
-// 这个变量用于决定pws us alphas pcs容器的大小，因此只能逐渐变大不能减小
-// 如果maximum_number_of_correspondences之前设置的过小，则重新设置，并重新初始化pws us alphas pcs的大小
+// number_of_correspondences is the logarithm of 3D point and 2D point matching each time RANSAC solves PnP
+// RANSAC takes many times, maximum_number_of_correspondences is the maximum number of matching logarithms
+// This variable is used to determine the size of the pws us alphas pcs container, so it can only be gradually increased and not decreased
+// If maximum_number_of_correspondences was previously set too small, reset it and reinitialize the size of pws us alphas pcs
 void PnPsolver::set_maximum_number_of_correspondences(int n)
 {
   if (maximum_number_of_correspondences < n) {
@@ -348,10 +348,10 @@ void PnPsolver::set_maximum_number_of_correspondences(int n)
     if (pcs != 0) delete [] pcs;
 
     maximum_number_of_correspondences = n;
-    pws = new double[3 * maximum_number_of_correspondences];// 每个3D点有(X Y Z)三个值
-    us = new double[2 * maximum_number_of_correspondences];// 每个图像2D点有(u v)两个值
-    alphas = new double[4 * maximum_number_of_correspondences];// 每个3D点由四个控制点拟合，有四个系数
-    pcs = new double[3 * maximum_number_of_correspondences];// 每个3D点有(X Y Z)三个值
+    pws = new double[3 * maximum_number_of_correspondences];// Each 3D point has three values (X Y Z)
+    us = new double[2 * maximum_number_of_correspondences];// Each image 2D point has (u v) two values
+    alphas = new double[4 * maximum_number_of_correspondences];// Each 3D point is fitted by four control points with four coefficients
+    pcs = new double[3 * maximum_number_of_correspondences];// Each 3D point has three values (X Y Z)
 
   }
 }
@@ -376,7 +376,7 @@ void PnPsolver::add_correspondence(double X, double Y, double Z, double u, doubl
 void PnPsolver::choose_control_points(void)
 {
   // Take C0 as the reference points centroid:
-// 步骤1：第一个控制点：参与PnP计算的参考3D点的几何中心  
+// Step 1: The first control point: the geometric center of the reference 3D point participating in the PnP calculation
   cws[0][0] = cws[0][1] = cws[0][2] = 0;
   for(int i = 0; i < number_of_correspondences; i++)
     for(int j = 0; j < 3; j++)
@@ -386,8 +386,8 @@ void PnPsolver::choose_control_points(void)
     cws[0][j] /= number_of_correspondences;
 
   
-// 步骤2：计算其它三个控制点，C1, C2, C3通过PCA分解得到
-  // 将所有的3D参考点写成矩阵，(number_of_correspondences *　３)的矩阵
+// Step 2: Calculate the other three control points, C1, C2, C3 are obtained by PCA decomposition
+  // Write all 3D reference points as a matrix, a matrix of (number_of_correspondences * 3)
   // Take C1, C2, and C3 from PCA on the reference points:
   CvMat * PW0 = cvCreateMat(number_of_correspondences, 3, CV_64F);
 
@@ -396,19 +396,19 @@ void PnPsolver::choose_control_points(void)
   CvMat DC      = cvMat(3, 1, CV_64F, dc);
   CvMat UCt     = cvMat(3, 3, CV_64F, uct);
   
-// 步骤2.1：将存在pws中的参考3D点减去第一个控制点的坐标（相当于把第一个控制点作为原点）, 并存入PW0
+// Step 2.1: Subtract the coordinates of the first control point from the reference 3D point stored in pws (equivalent to taking the first control point as the origin), and store it in PW0
   for(int i = 0; i < number_of_correspondences; i++)
     for(int j = 0; j < 3; j++)
       PW0->data.db[3 * i + j] = pws[3 * i + j] - cws[0][j];
     
-  // 步骤2.2：利用SVD分解P'P可以获得P的主分量
-  // 类似于齐次线性最小二乘求解的过程，
-  // PW0的转置乘以PW0
+  // Step 2.2: Use SVD to decompose P'P to obtain the principal components of P
+  // Similar to the process of homogeneous linear least squares solution, 
+  // the transpose of PW0 is multiplied by PW0
   cvMulTransposed(PW0, &PW0tPW0, 1);
   cvSVD(&PW0tPW0, &DC, &UCt, 0, CV_SVD_MODIFY_A | CV_SVD_U_T);
 
   cvReleaseMat(&PW0);
-// 步骤2.3：得到C1, C2, C3三个3D控制点，最后加上之前减掉的第一个控制点这个偏移量
+// Step 2.3: Get three 3D control points C1, C2, C3, and finally add the offset of the first control point that was subtracted before
   for(int i = 1; i < 4; i++) {
     double k = sqrt(dc[i - 1] / number_of_correspondences);
     for(int j = 0; j < 3; j++)
@@ -416,26 +416,26 @@ void PnPsolver::choose_control_points(void)
   }
 }
 
-// 求解四个控制点的系数alphas
+// Solving for the coefficient alphas of the four control points
 // (a2 a3 a4)' = inverse(cws2-cws1 cws3-cws1 cws4-cws1)*(pws-cws1)，a1 = 1-a2-a3-a4
-// 每一个3D控制点，都有一组alphas与之对应
-// cws1 cws2 cws3 cws4为四个控制点的坐标
-// pws为3D参考点的坐标
+// Each 3D control point has a set of alphas corresponding to it
+// cws1 cws2 cws3 cws4 are the coordinates of the four control points
+// pws is the coordinates of the 3D reference point
 void PnPsolver::compute_barycentric_coordinates(void)
 {
   double cc[3 * 3], cc_inv[3 * 3];
   CvMat CC     = cvMat(3, 3, CV_64F, cc);
   CvMat CC_inv = cvMat(3, 3, CV_64F, cc_inv);
   
-  // 第一个控制点在质心的位置，后面三个控制点减去第一个控制点的坐标（以第一个控制点为原点）
-  // 步骤1：减去质心后得到x y z轴
+  // The position of the first control point at the center of mass, the coordinates of the first control point minus the last three control points (with the first control point as the origin)
+  // Step 1: get the x y z axis after subtracting the centroid
   // 
-  // cws的排列 |cws1_x cws1_y cws1_z|  ---> |cws1|
+  // Arrangement of cws |cws1_x cws1_y cws1_z|  ---> |cws1|
 	      //          |cws2_x cws2_y cws2_z|       |cws2|
 	      //          |cws3_x cws3_y cws3_z|       |cws3|
 	      //          |cws4_x cws4_y cws4_z|       |cws4|
   //          
-  // cc的排列  |cc2_x cc3_x cc4_x|  --->|cc2 cc3 cc4|
+  // Arrangement of cc  |cc2_x cc3_x cc4_x|  --->|cc2 cc3 cc4|
 	  //          |cc2_y cc3_y cc4_y|
 	  //          |cc2_z cc3_z cc4_z|
   for(int i = 0; i < 3; i++)
@@ -445,10 +445,10 @@ void PnPsolver::compute_barycentric_coordinates(void)
   cvInvert(&CC, &CC_inv, CV_SVD);
   double * ci = cc_inv;
   for(int i = 0; i < number_of_correspondences; i++) {
-    double * pi = pws + 3 * i;// pi指向第i个3D点的首地址
-    double * a = alphas + 4 * i;// a指向第i个控制点系数alphas的首地址
+    double * pi = pws + 3 * i;// pi points to the first address of the i-th 3D point
+    double * a = alphas + 4 * i;// a points to the first address of the i-th control point coefficient alphas
     
-    // pi[]-cws[0][]表示将pi和步骤1进行相同的平移
+    // pi[]-cws[0][] means to translate pi the same as step 1
     for(int j = 0; j < 3; j++)
       a[1 + j] =
 	ci[3 * j    ] * (pi[0] - cws[0][0]) +
@@ -458,11 +458,11 @@ void PnPsolver::compute_barycentric_coordinates(void)
   }
 }
 
-// 填充最小二乘的M矩阵
-// 对每一个3D参考点：
+// Fill least squares M matrix
+// For each 3D reference point:
 // |ai1 0    -ai1*ui, ai2  0    -ai2*ui, ai3 0   -ai3*ui, ai4 0   -ai4*ui|
 // |0   ai1  -ai1*vi, 0    ai2  -ai2*vi, 0   ai3 -ai3*vi, 0   ai4 -ai4*vi|
-// 其中i从0到4
+// where i is from 0 to 4
 void PnPsolver::fill_M(CvMat * M,
 		  const int row, const double * as, const double u, const double v)
 {
@@ -481,7 +481,7 @@ void PnPsolver::fill_M(CvMat * M,
 }
 
 
-// 每一个控制点在相机坐标系下都表示为特征向量乘以beta的形式，EPnP论文的公式16
+// Each control point is represented in the camera coordinate system as a eigenvector multiplied by beta, Equation 16 of the EPnP paper
 void PnPsolver::compute_ccs(const double * betas, const double * ut)
 {
   for(int i = 0; i < 4; i++)
@@ -495,7 +495,7 @@ void PnPsolver::compute_ccs(const double * betas, const double * ut)
   }
 }
 
-// 用四个控制点作为单位向量表示下的世界坐标系下3D点的坐标
+// The coordinates of the 3D point in the world coordinate system represented by the four control points as the unit vector
 void PnPsolver::compute_pcs(void)
 {
   for(int i = 0; i < number_of_correspondences; i++) {
@@ -510,12 +510,12 @@ void PnPsolver::compute_pcs(void)
 double PnPsolver::compute_pose(double R[3][3], double t[3])
 {
   
-  // 步骤1：获得EPnP算法中的四个控制点
+  // Step 1: Obtain the four control points in the EPnP algorithm
   choose_control_points();
-  // 步骤2：计算世界坐标系下每个3D点用4个控制点线性表达时的系数alphas，公式1
+  // Step 2: Calculate the coefficient alphas when each 3D point is linearly expressed by 4 control points in the world coordinate system, formula 1
   compute_barycentric_coordinates();
 
-// 步骤3：构造M矩阵，公式(3)(4)-->(5)(6)(7)
+// Step 3: Construct M matrix, formula (3)(4)-->(5)(6)(7)
   CvMat * M = cvCreateMat(2 * number_of_correspondences, 12, CV_64F);
 
   for(int i = 0; i < number_of_correspondences; i++)
@@ -526,8 +526,8 @@ double PnPsolver::compute_pose(double R[3][3], double t[3])
   CvMat D   = cvMat(12,  1, CV_64F, d);
   CvMat Ut  = cvMat(12, 12, CV_64F, ut);
   
-  // 步骤3：求解Mx = 0
-  // SVD分解M'M
+  // Step 3: Solve for Mx = 0
+  // SVD Decomposition M'M
   cvMulTransposed(M, &MtM, 1);
   cvSVD(&MtM, &D, &Ut, 0, CV_SVD_MODIFY_A | CV_SVD_U_T);
   cvReleaseMat(&M);
@@ -542,17 +542,16 @@ double PnPsolver::compute_pose(double R[3][3], double t[3])
   double Betas[4][4], rep_errors[4];
   double Rs[4][3][3], ts[4][3];
   
-  // 不管什么情况，都假设论文中N=4，并求解部分betas（如果全求解出来会有冲突）
-  // 通过优化得到剩下的betas
-  // 最后计算R t
+  // In any case, assume that N=4 in the paper, and solve some betas (there will be conflicts if all solutions are solved)
+  // get the remaining betas by optimization
+  // Finally calculate R t
 
-  // EPnP论文公式10 15
+  // EPnP Thesis Formula 10 15
   find_betas_approx_1(&L_6x10, &Rho, Betas[1]);
   gauss_newton(&L_6x10, &Rho, Betas[1]);
   rep_errors[1] = compute_R_and_t(ut, Betas[1], Rs[1], ts[1]);
 
-  // EPnP论文公式11 15
-
+  // EPnP Thesis Formula 11 15
   find_betas_approx_2(&L_6x10, &Rho, Betas[2]);
   gauss_newton(&L_6x10, &Rho, Betas[2]);
   rep_errors[2] = compute_R_and_t(ut, Betas[2], Rs[2], ts[2]);
@@ -612,7 +611,7 @@ double PnPsolver::reprojection_error(const double R[3][3], const double t[3])
   return sum2 / number_of_correspondences;
 }
 
-// 根据世界坐标系下的四个控制点与机体坐标下对应的四个控制点（和世界坐标系下四个控制点相同尺度），求取R t
+// According to the four control points in the world coordinate system and the corresponding four control points in the body coordinate (the same scale as the four control points in the world coordinate system), find R t
 void PnPsolver::estimate_R_and_t(double R[3][3], double t[3])
 {
   double pc0[3], pw0[3];
@@ -846,7 +845,7 @@ void PnPsolver::compute_L_6x10(const double * ut, double * l_6x10)
   }
 }
 
-// 计算四个控制点任意两点间的距离，总共6个距离
+// Calculate the distance between any two points of the four control points, a total of 6 distances
 void PnPsolver::compute_rho(double * rho)
 {
   rho[0] = dist2(cws[0], cws[1]);
