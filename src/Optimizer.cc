@@ -1171,21 +1171,21 @@ namespace ORB_SLAM2
 		    g2o::EdgeSim3* el = new g2o::EdgeSim3();
 		    el->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pLKF->mnId)));
 		    el->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(nIDi)));
-		    // 根据两个Pose顶点的位姿算出相对位姿作为边 初始值 
+		    // Calculate the relative pose as the initial value of the edge according to the pose of the two Pose vertices
 		    el->setMeasurement(Sli);
 		    el->information() = matLambda;
 		    optimizer.addEdge(el);
 		}
 	    }
 	    
-       // 步骤4.3：关键帧<----->相邻帧  最有很好共视关系的关键帧也作为边进行优化
-            // 使用经过Sim3调整前关键帧之间的相对关系作为边
+       	    // Step 4.3: Key Frames <-----> Adjacent Frames   The keyframes with the best common view relationship are also optimized as edges
+            // Use the relative relationship between the keyframes before the Sim3 adjustment as the edge
 	    // Covisibility graph edges
-	    const vector<KeyFrame*> vpConnectedKFs = pKF->GetCovisiblesByWeight(minFeat);// 100个相邻帧
+	    const vector<KeyFrame*> vpConnectedKFs = pKF->GetCovisiblesByWeight(minFeat);// 100 adjacent frames
 	    for(vector<KeyFrame*>::const_iterator vit=vpConnectedKFs.begin(); vit!=vpConnectedKFs.end(); vit++)
 	    {
-		KeyFrame* pKFn = *vit;// 关键帧 相邻帧
-		// 非 父子帧边 无孩子  无闭环边
+		KeyFrame* pKFn = *vit;// Keyframe adjacent frame
+		// Non-parent-child frame edge no child no closed loop edge
 		if(pKFn && pKFn !=pParentKF && !pKF->hasChild(pKFn) && !sLoopEdges.count(pKFn))
 		{
 		    if(!pKFn->isBad() && pKFn->mnId < pKF->mnId)
@@ -1197,7 +1197,7 @@ namespace ORB_SLAM2
 
 			LoopClosing::KeyFrameAndPose::const_iterator itn = NonCorrectedSim3.find(pKFn);
 			
-                        // 尽可能得到未经过Sim3传播调整的位姿
+                        // Get as many poses as possible without being adjusted by Sim3 propagation
 			if(itn!=NonCorrectedSim3.end())
 			    Snw = itn->second;
 			else
@@ -1209,13 +1209,13 @@ namespace ORB_SLAM2
 			en->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKFn->mnId)));
 			en->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(nIDi)));
 			en->setMeasurement(Sni);
-			en->information() = matLambda;// 信息矩阵
+			en->information() = matLambda;// information matrix
 			optimizer.addEdge(en);
 		    }
 		}
 	    }
 	}
-// 步骤5：开始g2o优化
+	// Step 5: Start g2o optimization
 	// Optimize!
 	optimizer.initializeOptimization();
 	optimizer.optimize(20);//优化20次
@@ -1223,25 +1223,25 @@ namespace ORB_SLAM2
 	unique_lock<mutex> lock(pMap->mMutexMapUpdate);
 
 	// SE3 Pose Recovering. Sim3:[sR t;0 1] -> SE3:[R t/s;0 1]
-// 步骤6：设定帧关键帧优化后的位姿
+	// Step 6: Set the frame keyframe optimized pose
 	for(size_t i=0;i<vpKFs.size();i++)
 	{
-	    KeyFrame* pKFi = vpKFs[i];//关键帧
+	    KeyFrame* pKFi = vpKFs[i];//Keyframe
 
 	    const int nIDi = pKFi->mnId;
 
 	    g2o::VertexSim3Expmap* VSim3 = static_cast<g2o::VertexSim3Expmap*>(optimizer.vertex(nIDi));
-	    g2o::Sim3 CorrectedSiw =  VSim3->estimate();// 优化后的 关键帧的 sim3位姿
-	    vCorrectedSwc[nIDi]=CorrectedSiw.inverse(); // 存入 优化后的位姿
+	    g2o::Sim3 CorrectedSiw =  VSim3->estimate();// The sim3 pose of the optimized keyframes
+	    vCorrectedSwc[nIDi]=CorrectedSiw.inverse(); // Save the optimized pose
 	    Eigen::Matrix3d eigR = CorrectedSiw.rotation().toRotationMatrix();
 	    Eigen::Vector3d eigt = CorrectedSiw.translation();
-	    double s = CorrectedSiw.scale();// 尺度
+	    double s = CorrectedSiw.scale();// dimension
 
 	    eigt *=(1./s); //[R t/s;0 1]
 	    cv::Mat Tiw = Converter::toCvSE3(eigR,eigt);
-	    pKFi->SetPose(Tiw);// 欧式变换位姿
+	    pKFi->SetPose(Tiw);// euclidean Transform Pose
 	}
-// 步骤7：步骤5和步骤6优化得到 关键帧的位姿 后，MapPoints根据参考帧 优化前后的相对关系调整自己的位置
+	// Step 7: After step 5 and step 6 are optimized to obtain the pose of the key frame, MapPoints adjusts its position according to the relative relationship between the reference frame before and after optimization
 	// Correct points. Transform to "non-optimized" reference keyframe pose and transform back with optimized pose
 	for(size_t i=0, iend=vpMPs.size(); i<iend; i++)
 	{
@@ -1251,14 +1251,14 @@ namespace ORB_SLAM2
 		continue;
 
 	    int nIDr;
-	    // 该MapPoint经过Sim3调整过，(LoopClosing.cpp，CorrectLoop函数，步骤2.2_
+	    // The MapPoint has been adjusted by Sim3, (LoopClosing.cpp, CorrectLoop function, step 2.2_
 	    if(pMP->mnCorrectedByKF == pCurKF->mnId)
 	    {
 		nIDr = pMP->mnCorrectedReference;
 	    }
 	    else
 	    {
-	      // 通过情况下MapPoint的参考关键帧就是创建该MapPoint的那个关键帧
+	        // The reference keyframe of the MapPoint is the keyframe that created the MapPoint.
 		KeyFrame* pRefKF = pMP->GetReferenceKeyFrame();
 		nIDr = pRefKF->mnId;// 地图点的 参考帧 id
 	    }
