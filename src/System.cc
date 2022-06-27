@@ -109,7 +109,6 @@ namespace ORB_SLAM2
 	      cout << endl << "Load ORB dictionary. This could take a while..." << endl;
 
 	       
-	       */
 	  //  Open dictionary file
 	  /////// ////////////////////////////////////
 	      clock_t tStart = clock();// start time
