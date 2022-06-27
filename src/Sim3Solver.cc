@@ -38,13 +38,13 @@ Sim3Solver::Sim3Solver(KeyFrame *pKF1, KeyFrame *pKF2, const vector<MapPoint *> 
     mvAllIndices.reserve(mN1);
 
     size_t idx=0;
-    // mN1为pKF2特征点的个数
+    // mN1 is the number of pKF2 feature points
     for(int i1=0; i1<mN1; i1++)
     {
-        // 如果该特征点在pKF1中有匹配
+        // If the feature point has a match in pKF1
         if(vpMatched12[i1])
         {
-            // pMP1和pMP2是匹配的MapPoint
+            // pMP1 and pMP2 are matching MapPoints
             MapPoint* pMP1 = vpKeyFrameMP1[i1];
             MapPoint* pMP2 = vpMatched12[i1];
 
@@ -54,14 +54,14 @@ Sim3Solver::Sim3Solver(KeyFrame *pKF1, KeyFrame *pKF2, const vector<MapPoint *> 
             if(pMP1->isBad() || pMP2->isBad())
                 continue;
 
-            // indexKF1和indexKF2是匹配特征点的索引
+            // indexKF1 and indexKF2 are the indices of matching feature points
             int indexKF1 = pMP1->GetIndexInKeyFrame(pKF1);
             int indexKF2 = pMP2->GetIndexInKeyFrame(pKF2);
 
             if(indexKF1<0 || indexKF2<0)
                 continue;
 
-            // kp1和kp2是匹配特征点
+            // kp1 and kp2 are matching feature points
             const cv::KeyPoint &kp1 = pKF1->mvKeysUn[indexKF1];
             const cv::KeyPoint &kp2 = pKF2->mvKeysUn[indexKF2];
 
@@ -71,7 +71,7 @@ Sim3Solver::Sim3Solver(KeyFrame *pKF1, KeyFrame *pKF2, const vector<MapPoint *> 
             mvnMaxError1.push_back(9.210*sigmaSquare1);
             mvnMaxError2.push_back(9.210*sigmaSquare2);
 
-            // mvpMapPoints1和mvpMapPoints2是匹配的MapPoints容器
+            // mvpMapPoints1 and mvpMapPoints2 are matching MapPoints containers
             mvpMapPoints1.push_back(pMP1);
             mvpMapPoints2.push_back(pMP2);
             mvnIndices1.push_back(i1);
@@ -122,7 +122,7 @@ void Sim3Solver::SetRansacParameters(double probability, int minInliers, int max
     mnIterations = 0;
 }
 
-// Ransac求解mvX3Dc1和mvX3Dc2之间Sim3，函数返回mvX3Dc2到mvX3Dc1的Sim3变换
+// Ransac solves the Sim3 between mvX3Dc1 and mvX3Dc2, and the function returns the Sim3 transformation of mvX3Dc2 to mvX3Dc1
 cv::Mat Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool> &vbInliers, int &nInliers)
 {
     bNoMore = false;
@@ -143,20 +143,20 @@ cv::Mat Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool> &vbInli
     int nCurrentIterations = 0;
     while(mnIterations<mRansacMaxIts && nCurrentIterations<nIterations)
     {
-        nCurrentIterations++;// 这个函数中迭代的次数
-        mnIterations++;// 总的迭代次数，默认为最大为300
+        nCurrentIterations++;// the number of iterations in this function
+        mnIterations++;// The total number of iterations, the default is a maximum of 300
 
         vAvailableIndices = mvAllIndices;
 
         // Get min set of points
-        // 步骤1：任意取三组点算Sim矩阵
+        // Step 1: Arbitrarily take three sets of points to calculate the Sim matrix
         for(short i = 0; i < 3; ++i)
         {
             int randi = DUtils::Random::RandomInt(0, vAvailableIndices.size()-1);
 
             int idx = vAvailableIndices[randi];
 
-            // P3Dc1i和P3Dc2i中点的排列顺序：
+            // Arrangement order of the midpoints of P3Dc1i and P3Dc2i:
             // x1 x2 x3 ...
             // y1 y2 y3 ...
             // z1 z2 z3 ...
@@ -167,10 +167,10 @@ cv::Mat Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool> &vbInli
             vAvailableIndices.pop_back();
         }
 
-        // 步骤2：根据两组匹配的3D点，计算之间的Sim3变换
+        // Step 2: Calculate the Sim3 transform between the two sets of matched 3D points
         ComputeSim3(P3Dc1i,P3Dc2i);
 
-        // 步骤3：通过投影误差进行inlier检测
+        // Step 3: Inlier detection by projection error
         CheckInliers();
 
         if(mnInliersi>=mnBestInliers)
@@ -182,7 +182,7 @@ cv::Mat Sim3Solver::iterate(int nIterations, bool &bNoMore, vector<bool> &vbInli
             mBestTranslation = mt12i.clone();
             mBestScale = ms12i;
 
-            if(mnInliersi>mRansacMinInliers)// 只要计算得到一次合格的Sim变换，就直接返回
+            if(mnInliersi>mRansacMinInliers)// As long as a qualified Sim transformation is obtained by calculation, it will return directly
             {
                 nInliers = mnInliersi;
                 for(int i=0; i<N; i++)
@@ -207,13 +207,13 @@ cv::Mat Sim3Solver::find(vector<bool> &vbInliers12, int &nInliers)
 
 void Sim3Solver::ComputeCentroid(cv::Mat &P, cv::Mat &Pr, cv::Mat &C)
 {
-    // 这两句可以使用CV_REDUCE_AVG选项来搞定
-    cv::reduce(P,C,1,CV_REDUCE_SUM);// 矩阵P每一行求和
-    C = C/P.cols;// 求平均
+    // These two sentences can be done using the CV_REDUCE_AVG option
+    cv::reduce(P,C,1,CV_REDUCE_SUM);// Sum each row of matrix P
+    C = C/P.cols;// average
 
     for(int i=0; i<P.cols; i++)
     {
-        Pr.col(i)=P.col(i)-C;//减去质心
+        Pr.col(i)=P.col(i)-C;//minus centroid
     }
 }
 
@@ -231,8 +231,8 @@ void Sim3Solver::ComputeSim3(cv::Mat &P1, cv::Mat &P2)
     cv::Mat O1(3,1,Pr1.type()); // Centroid of P1
     cv::Mat O2(3,1,Pr2.type()); // Centroid of P2
 
-    // O1和O2分别为P1和P2矩阵中3D点的质心
-    // Pr1和Pr2为减去质心后的3D点
+    // O1 and O2 are the centroids of the 3D points in the P1 and P2 matrices, respectively
+    // Pr1 and Pr2 are the 3D points after subtracting the centroid
     ComputeCentroid(P1,Pr1,O1);
     ComputeCentroid(P2,Pr2,O2);
 
@@ -269,8 +269,8 @@ void Sim3Solver::ComputeSim3(cv::Mat &P1, cv::Mat &P2)
 
     cv::eigen(N,eval,evec); //evec[0] is the quaternion of the desired rotation
 
-    // N矩阵最大特征值（第一个特征值）对应特征向量就是要求的四元数死（q0 q1 q2 q3）
-    // 将(q1 q2 q3)放入vec行向量，vec就是四元数旋转轴乘以sin(ang/2)
+    // The largest eigenvalue of the N matrix (the first eigenvalue) corresponds to the eigenvector which is the required quaternion dead (q0 q1 q2 q3)
+    // Put (q1 q2 q3) into the vec row vector, vec is the quaternion rotation axis multiplied by sin(ang/2)
     cv::Mat vec(1,3,evec.type());
     (evec.row(0).colRange(1,4)).copyTo(vec); //extract imaginary part of the quaternion (sin*axis)
 
@@ -291,7 +291,7 @@ void Sim3Solver::ComputeSim3(cv::Mat &P1, cv::Mat &P2)
 
     if(!mbFixScale)
     {
-        // 论文中还有一个求尺度的公式，p632右中的位置，那个公式不用考虑旋转
+        // There is also a formula for scaling in the paper, the position in the middle right of p632, that formula does not consider rotation
         double nom = Pr1.dot(P3);
         cv::Mat aux_P3(P3.size(),P3.type());
         aux_P3=P3;
@@ -343,8 +343,8 @@ void Sim3Solver::ComputeSim3(cv::Mat &P1, cv::Mat &P2)
 void Sim3Solver::CheckInliers()
 {
     vector<cv::Mat> vP1im2, vP2im1;
-    Project(mvX3Dc2,vP2im1,mT12i,mK1);// 把2系中的3D经过Sim3变换(mT12i)到1系中计算重投影坐标
-    Project(mvX3Dc1,vP1im2,mT21i,mK2);// 把1系中的3D经过Sim3变换(mT21i)到2系中计算重投影坐标
+    Project(mvX3Dc2,vP2im1,mT12i,mK1);// Convert the 3D in the 2 system through Sim3 transformation (mT12i) to the 1 system to calculate the reprojection coordinates
+    Project(mvX3Dc1,vP1im2,mT21i,mK2);// Convert the 3D in the 1 system through Sim3 transformation (mT21i) to the 2 system to calculate the reprojection coordinates
 
     mnInliersi=0;
 
