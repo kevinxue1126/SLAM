@@ -850,27 +850,27 @@ namespace ORB_SLAM2
 	{
 	    // Step 11: Detect outlier (excessive error outside point), and set the next time not to optimize
 	    // Check inlier observations
-	    // 更新内点 标志
+	    // Update interior point flags
 	    //  if(pKFi->mvuRight[1]<0)
 	    //  {  
 	  
-	 // 步骤11.1：遍历每一个单目 优化边
+	      // Step 11.1: Traverse each monocular    optimized edge
 	      for(size_t i=0, iend=vpEdgesMono.size(); i<iend;i++)
 	      {
 		  g2o::EdgeSE3ProjectXYZ* e = vpEdgesMono[i];
-		  MapPoint* pMP = vpMapPointEdgeMono[i];// 边对应的地图点
+		  MapPoint* pMP = vpMapPointEdgeMono[i];// The map point corresponding to the edge
 
 		  if(pMP->isBad())
 		      continue;
-		  // 基于卡方检验计算出的阈值（假设测量有一个像素的偏差）
+		  // Threshold calculated based on the chi-square test (assuming the measurement has a one-pixel deviation)
 		  if(e->chi2() > 5.991 || !e->isDepthPositive())
 		  {
-		      e->setLevel(1);// 不优化
+		      e->setLevel(1);// not optimized
 		  }
-		  e->setRobustKernel(0);// 不使用核函数
+		  e->setRobustKernel(0);// do not use kernel function
 	      }
 	      
-         // 步骤11.2 : 遍历每一个双目 优化边
+         	// Step 11.2 : Traverse each binocular   optimized edge
 	      for(size_t i=0, iend=vpEdgesStereo.size(); i<iend;i++)
 	      {
 		  g2o::EdgeStereoSE3ProjectXYZ* e = vpEdgesStereo[i];
@@ -878,47 +878,47 @@ namespace ORB_SLAM2
 
 		  if(pMP->isBad())
 		      continue;
-                 // 基于卡方检验计算出的阈值（假设测量有一个像素的偏差）
+                 // Threshold calculated based on the chi-square test (assuming the measurement has a one-pixel deviation)
 		  if(e->chi2() > 7.815 || !e->isDepthPositive())
 		  {
-		      e->setLevel(1);// 不优化
+		      e->setLevel(1);// not optimized
 		  }
 
-		  e->setRobustKernel(0);// 不使用核函数
+		  e->setRobustKernel(0);// do not use kernel function
 	      }
 
 	// Optimize again without the outliers
-// 步骤12：排除误差较大的outlier后再次优化 10次
+	// Step 12: Re-optimize 10 times after excluding outliers with large errors
 	optimizer.initializeOptimization(0);
 	optimizer.optimize(10);
 
       }
       
- // 步骤13：在优化后重新计算误差，剔除连接误差比较大的关键帧和MapPoint
-	vector<pair<KeyFrame*,MapPoint*> > vToErase;// 连接误差较大 需要 剔除的 关键帧和MapPoint
-	vToErase.reserve(vpEdgesMono.size() + vpEdgesStereo.size());//单目边 双目边
+ 	// Step 13: Recalculate the error after optimization, and remove keyframes and MapPoints with large connection errors
+	vector<pair<KeyFrame*,MapPoint*> > vToErase;// Keyframes and MapPoints that need to be eliminated if the connection error is large
+	vToErase.reserve(vpEdgesMono.size() + vpEdgesStereo.size());// monocular side   binocular side
 	    // Check inlier observations 
-	 // 每一个单目边  误差 两维 
+	    // each monocular edge  error   two-dimensional 
 	    for(size_t i=0, iend=vpEdgesMono.size(); i<iend;i++)
 	    {
-		g2o::EdgeSE3ProjectXYZ* e = vpEdgesMono[i];//单目优化边
-		MapPoint* pMP = vpMapPointEdgeMono[i];// 边对应的 地图点
+		g2o::EdgeSE3ProjectXYZ* e = vpEdgesMono[i];// monocular optimized edge
+		MapPoint* pMP = vpMapPointEdgeMono[i];// The map point corresponding to the edge
 
 		if(pMP->isBad())
 		    continue;
-               // 基于卡方检验计算出的阈值（误差过大，删除 假设测量有一个像素的偏差）
+               // Threshold calculated based on the chi-square test (too much error removed, assuming the measurement has a one-pixel deviation)
 		if(e->chi2()>5.991 || !e->isDepthPositive())
 		{
-		    KeyFrame* pKFi = vpEdgeKFMono[i];//边对应的 帧
-       // 步骤13.1：标记需要删除的边	    
-		    vToErase.push_back(make_pair(pKFi,pMP));//删除 这个边 
+		    KeyFrame* pKFi = vpEdgeKFMono[i];//the frame corresponding to the edge
+       		    // Step 13.1: Mark the edges that need to be deleted    
+		    vToErase.push_back(make_pair(pKFi,pMP));//delete this edge 
 		}
 	    }
-          // 每一个双目边  误差 三维 
+            // each binocular side error three-dimensional 
 	    for(size_t i=0, iend=vpEdgesStereo.size(); i<iend;i++)
 	    {
-		g2o::EdgeStereoSE3ProjectXYZ* e = vpEdgesStereo[i];//双目优化边
-		MapPoint* pMP = vpMapPointEdgeStereo[i];// 边对应的 地图点
+		g2o::EdgeStereoSE3ProjectXYZ* e = vpEdgesStereo[i];// binocular optimized edge
+		MapPoint* pMP = vpMapPointEdgeStereo[i];// the map point corresponding to the edge
 
 		if(pMP->isBad())
 		    continue;
