@@ -111,169 +111,169 @@ namespace ORB_SLAM2
 	g2o::BlockSolver_6_3 * solver_ptr = new g2o::BlockSolver_6_3(linearSolver);
         // Step 1.2: Set up the solver
 	g2o::OptimizationAlgorithmLevenberg* solver = new g2o::OptimizationAlgorithmLevenberg(solver_ptr);// LM Lymar algorithm
-	// g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr );// 高斯牛顿
-	// g2o::OptimizationAlgorithmDogleg* solver = new g2o::OptimizationAlgorithmDogleg( solver_ptr );//狗腿算法
-       // 步骤1.4：设置稀疏优化求解器  
-	g2o::SparseOptimizer optimizer;// 稀疏 优化模型
-	optimizer.setAlgorithm(solver);// 设置求解器
-        //   设置是否强制终止，需要终止迭代的时候强制终止 
+	// g2o::OptimizationAlgorithmGaussNewton* solver = new g2o::OptimizationAlgorithmGaussNewton( solver_ptr );// Gauss Newton
+	// g2o::OptimizationAlgorithmDogleg* solver = new g2o::OptimizationAlgorithmDogleg( solver_ptr );//dogleg algorithm
+       // Step 1.4: Setting up the sparse optimization solver
+	g2o::SparseOptimizer optimizer;// Sparse optimization model
+	optimizer.setAlgorithm(solver);// Set up the solver
+        //   Set whether to force termination, force termination when the iteration needs to be terminated
 	if(pbStopFlag)
-	    optimizer.setForceStopFlag(pbStopFlag);// 优化停止标志
+	    optimizer.setForceStopFlag(pbStopFlag);// Optimization stop sign
 
-	long unsigned int maxKFid = 0;// 最大关键帧 ID
+	long unsigned int maxKFid = 0;// Maximum keyframe ID
 	
-// 步骤2：向优化器添加顶点
+	// Step 2: Add Vertices to the Optimizer
 	// Set KeyFrame vertices 
-     // 步骤2.1：向优化器添加关键帧位姿顶点 添加位姿态顶点  设置 每一帧的 6自由度位姿 顶点
+     	// Step 2.1: Add Keyframe Pose Vertices to the Optimizer Add Pose Vertices Set 6DOF Pose Vertices for Each Frame
 	for(size_t i=0; i<vpKFs.size(); i++)
 	{
-	    KeyFrame* pKF = vpKFs[i];//图中的每一个关键帧
-	    if(pKF->isBad())//不好的帧 不优化  野帧
+	    KeyFrame* pKF = vpKFs[i];//Each keyframe in the graph
+	    if(pKF->isBad())//bad frame not optimized wild frame
 		continue;
-	    // 顶点 vertex   优化变量
-	    g2o::VertexSE3Expmap * vSE3 = new g2o::VertexSE3Expmap();//camera pose   旋转矩阵 R   平移矩阵 t 的   李代数形式
-	    vSE3->setEstimate(Converter::toSE3Quat(pKF->GetPose())); // 优化变量初始值  mat形式位姿 转成  SE3Quat 李代数形式
-	    vSE3->setId(pKF->mnId);// 顶点 id 
-	    vSE3->setFixed(pKF->mnId == 0);// 初始帧 位姿固定为 单位对角矩阵 世界坐标原点
-	    optimizer.addVertex(vSE3);//添加顶点
+	    // vertex vertex optimization variable
+	    g2o::VertexSE3Expmap * vSE3 = new g2o::VertexSE3Expmap();//camera pose 
+	    vSE3->setEstimate(Converter::toSE3Quat(pKF->GetPose())); // Optimize the initial value of the variable mat form pose Convert to SE3Quat Lie algebra form
+	    vSE3->setId(pKF->mnId);// vertex id
+	    vSE3->setFixed(pKF->mnId == 0);// The initial frame pose is fixed as a unit diagonal matrix.  world coordinate origin
+	    optimizer.addVertex(vSE3);//add vertex
 	    if(pKF->mnId > maxKFid)
-		maxKFid = pKF->mnId;// 最大关键帧 ID
+		maxKFid = pKF->mnId;// Maximum keyframe ID
 	}
 
-	const float thHuber2D = sqrt(5.99);	 //  g2o 优化为 两个值 像素点坐标               时鲁棒优化核函数 系数
-	const float thHuber3D = sqrt(7.815);   //  g2o 优化为 3个值 像素点坐标 + 视差     时鲁棒优化核函数  系数
+	const float thHuber2D = sqrt(5.99);	 //  g2o is optimized to two values pixel coordinates            Time Robust Optimization Kernel Function Coefficients
+	const float thHuber3D = sqrt(7.815);   //  g2o is optimized to 3 values, and the kernel function coefficients are robustly optimized when pixel coordinates + parallax
 
-     // 步骤2.2：向优化器添加MapPoints顶点  添加3自由度 地图点 顶点
+     	// Step 2.2: Add MapPoints vertices to the optimizer, add 3 DOF map points vertices
 	// Set MapPoint vertices
-	for(size_t i=0; i<vpMP.size(); i++)// 每一个地图点
+	for(size_t i=0; i<vpMP.size(); i++)// every map point
 	{
-	    MapPoint* pMP = vpMP[i];// 地图点
-	    if(pMP->isBad())//野点 跳过
+	    MapPoint* pMP = vpMP[i];// map point
+	    if(pMP->isBad())//wild spot continue
 		continue;
-	    // g2o 3d 地图点类型
-	    g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();// 3D 点  landmarks
-	    vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));//优化变量初始值
-	    const int id = pMP->mnId + maxKFid+1;//设置 3d 地图点 g2o图 中的 顶点 接着 位姿顶点id之后
-	    vPoint->setId(id);// 顶点 id 
-	    vPoint->setMarginalized(true);// 在优化过程中，这个节点应该被边缘化  g2o 中必须设置 marg
-	    optimizer.addVertex(vPoint);// 添加顶点
+	    // g2o 3d map point type
+	    g2o::VertexSBAPointXYZ* vPoint = new g2o::VertexSBAPointXYZ();// 3D point  landmarks
+	    vPoint->setEstimate(Converter::toVector3d(pMP->GetWorldPos()));//Optimize variable initial value
+	    const int id = pMP->mnId + maxKFid+1;//Set the 3d map point, the vertex in the g2o map is followed by the pose vertex id
+	    vPoint->setId(id);// vertex id 
+	    vPoint->setMarginalized(true);// During the optimization process, this node should be marginalized, and mar must be set in g2o
+	    optimizer.addVertex(vPoint);// add vertex
 
 	  //  const map<KeyFrame*,size_t> observations = pMP->GetObservations();
-	  const auto observations = pMP->GetObservations();// 能够观测到该地图点的  观测关键帧 都应该和 这个地图顶点相连
-	  // 地图点和地图点之间的 连线 是约束关系  是边 
+	  const auto observations = pMP->GetObservations();// Observation keyframes that can observe this map point should be connected to this map vertex
+	    // The connection between map points and map points is a constraint relationship 
 	    int nEdges = 0;
 	    
-// 步骤3：向优化器添加投影边边  edge  地图点 和 各自观测帧 之间的 关系 
+	    // Step 3: Add to the optimizer the relationship between projected edge map points and their respective observation frames 
 	    // map<KeyFrame*,size_t>::const_iterator mit 
 	    for( map<KeyFrame*,size_t>::const_iterator mit=observations.begin(); mit!=observations.end(); mit++)
 	    {
 
-		KeyFrame* pKF = mit->first;//观测到该点的一个关键帧
-		if(pKF->isBad() || pKF->mnId > maxKFid)//这个关键帧 是野帧 或者 不在优化的顶点范围内 跳过
+		KeyFrame* pKF = mit->first;//A keyframe at which the point was observed
+		if(pKF->isBad() || pKF->mnId > maxKFid)//This keyframe is wild or not within the optimized vertex range continue
 		    continue;
 
-		nEdges++;// 边 计数
-		// 该地图点在 对应 观测帧 上  对应的 关键点 像素 坐标
-		const cv::KeyPoint &kpUn = pKF->mvKeysUn[mit->second];// 该观测帧对应的 改点在 图像上的 像素点坐标
+		nEdges++;// edge count
+		// The map point is on the corresponding observation frame, the corresponding key point pixel, coordinate
+		const cv::KeyPoint &kpUn = pKF->mvKeysUn[mit->second];// The coordinates of the pixel point on the image corresponding to the change point of the observation frame
 
-      // 【7】对于单目相机 右图匹配点坐标 小于0 的话是单目
+      		// [7] For a monocular camera, if the coordinates of the matching point in the right image are less than 0, it is a monocular
 		if( pKF->mvuRight[mit->second] < 0 )
 		{
-		    Eigen::Matrix<double,2,1> obs;//像素点坐标
+		    Eigen::Matrix<double,2,1> obs;//pixel coordinates
 		    obs << kpUn.pt.x, kpUn.pt.y;
 
-		    g2o::EdgeSE3ProjectXYZ* e = new g2o::EdgeSE3ProjectXYZ();// 边
-	      // 设置 顶点 对应的地图点 和对于的 观测关键帧  相机位姿
-		    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id)));// 对应的地图点
-		    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKF->mnId)));// 对应的关键帧
-		    e->setMeasurement(obs);// 观测值是 帧上 对于的像素坐标
-		    const float &invSigma2 = pKF->mvInvLevelSigma2[kpUn.octave];// 在图像金字塔上的层数
-		    e->setInformation(Eigen::Matrix2d::Identity()*invSigma2);//信息矩阵  误差权重矩阵
-		    // 观测值为 两个值 像素点坐标 所以 误差权重矩阵 为2*2
+		    g2o::EdgeSE3ProjectXYZ* e = new g2o::EdgeSE3ProjectXYZ();// side
+	      	    // Set the map point corresponding to the vertex and the observation keyframe for   camera pose
+		    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id)));// corresponding map point
+		    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKF->mnId)));// corresponding key frame
+		    e->setMeasurement(obs);// Observations are pixel coordinates on the frame for
+		    const float &invSigma2 = pKF->mvInvLevelSigma2[kpUn.octave];// The number of layers on the image pyramid
+		    e->setInformation(Eigen::Matrix2d::Identity()*invSigma2);//information matrix  Error weight matrix
+		    // The observed value is two values, pixel coordinates, so the error weight matrix is 2*2
 		    // 
-    // 2D - 3D点对 优化方式  si * pi = K * T * Pi = K * [R t]* Pi  =  K * exp(f) * Pi  =  K * Pi'  
-		    //   Pi'（地图点）为相机坐标系下的坐标  exp(f) * Pi  前三维 (Xi', Yi', Zi')     exp(f) 为 T的李代数形式
-    /*  s*u       [fx 0 cx         X'
-    *   s*v  =     0 fy cy  *     Y'
-    *   s             0 0  1]         Z'
-    *  利用第三行消去s(实际上就是 P'的深度)   u像素坐标
-    *  u = fx * X'/Z' + cx    横坐标
-    *  v = fy * Y'/Z'  + cy    纵坐标
-    * 
-    * p 观测值是 帧上 对于的像素坐标   u是地图点转换过来的
-    *  * 误差 e  = p - u = p -K *P' 
-    * e对∇f = e对u导数 * u对∇f 导数 = u对∇f 导数 = u对P'导数 * P'对∇f 导数         链式求导法则
-    *
-    *  * u对P'的偏导数 = - [ u对X'的偏导数 u对Y'的偏导数 u对Z'的偏导数;
-    *                                   v对X'的偏导数 v对Y'的偏导数  v对Z'的偏导数]  = - [ fx/Z'   0        -fx * X'/Z' ^2 
-    *                                                                                                                        0       fy/Z'    -fy* Y'/Z' ^2]
-    *  *  P'对∇f的偏导数 = [ I  -P'叉乘矩阵] 3*6大小   平移在前  旋转在后
-    *  = [ 1 0  0   0   Z'   -Y' 
-    *       0 1  0  -Z'  0    X'
-    *       0 0  1  Y'   -X   0]
-    * 有向量 t = [ a1 a2 a3] 其
-    * 叉乘矩阵 = [0  -a3  a2;
-    *                     a3  0  -a1; 
-    *                    -a2 a1  0 ]  
-    * 
-    * 两者相乘得到 
-    * J = - [fx/Z'   0      -fx * X'/Z' ^2   -fx * X'*Y'/Z' ^2      fx + fx * X'^2/Z' ^2    -fx*Y'/Z'
-    *           0     fy/Z'   -fy* Y'/Z' ^2    -fy -fy* Y'^2/Z' ^2   fy * X'*Y'/Z' ^2          fy*X'/Z'    ] 
-    * 如果是 旋转在前 平移在后 调换前三列  后三列 
-    * 
-    * [2]  优化 P点坐标值
-    * e 对P的偏导数   = e 对P'的偏导数 *  P'对P的偏导数 = e 对P'的偏导数 * R
-    * P' = R * P + t
-    * P'对P的偏导数  = R
-    * 
-    */		
-		    if(bRobust)// 鲁棒优化核函数
+    		    // 2D - 3D point pair optimization method  si * pi = K * T * Pi = K * [R t]* Pi  =  K * exp(f) * Pi  =  K * Pi'  
+		    //   Pi' (map point) is the coordinate in the camera coordinate system exp(f) * Pi Front three-dimensional (Xi', Yi', Zi') exp(f) is the Lie algebra form of T
+		    /*  s*u       [fx 0 cx         X'
+		    *   s*v  =     0 fy cy  *     Y'
+		    *   s             0 0  1]         Z'
+		    *  Use the third line to eliminate s (actually the depth of P') u pixel coordinates
+		    *  u = fx * X'/Z' + cx    Abscissa
+		    *  v = fy * Y'/Z'  + cy   Y-axis
+		    * 
+		    * The p observation is the pixel coordinate on the frame, and u is the converted map point
+		    *  * error e  = p - u = p -K *P' 
+		    * e vs ∇f = e vs u derivative * u vs ∇f derivative = u vs ∇f derivative = u vs P'derivative * P'vs ∇f derivative         chain derivation rule
+		    *
+		    *  * u vs P' Partial derivative = - [ u vs X' Partial derivative u vs Y' Partial derivative u vs Z' Partial derivative;
+		    *                                   v vs X' Partial derivative v vs Y' Partial derivative  v vs Z' Partial derivative]  = - [ fx/Z'   0        -fx * X'/Z' ^2 
+		    *                                                                                                                        0       fy/Z'    -fy* Y'/Z' ^2]
+		    *  *  P' vs ∇f Partial derivative = [ I  -P' cross product matrix] 3*6 size   pan forward  rotate behind
+		    *  = [ 1 0  0   0   Z'   -Y' 
+		    *       0 1  0  -Z'  0    X'
+		    *       0 0  1  Y'   -X   0]
+		    * There are vectors t = [ a1 a2 a3] such
+		    * cross product matrix = [0  -a3  a2;
+		    *                     a3  0  -a1; 
+		    *                    -a2 a1  0 ]  
+		    * 
+		    * Multiply the two to get
+		    * J = - [fx/Z'   0      -fx * X'/Z' ^2   -fx * X'*Y'/Z' ^2      fx + fx * X'^2/Z' ^2    -fx*Y'/Z'
+		    *           0     fy/Z'   -fy* Y'/Z' ^2    -fy -fy* Y'^2/Z' ^2   fy * X'*Y'/Z' ^2          fy*X'/Z'    ] 
+		    * If the rotation is in the front, the translation is in the back, and the first three columns are swapped and the last three columns are exchanged
+		    * 
+		    * [2]  Optimize the coordinate value of point P
+		    * The partial derivative of e with respect to P   = e  vs P' Partial derivative *  P' vs P Partial derivative = e  vs P' Partial derivative * R
+		    * P' = R * P + t
+		    * P' vs P Partial derivative  = R
+		    * 
+		    */		
+		    if(bRobust)// Robust optimization kernel function
 		    {
 			g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
-			e->setRobustKernel(rk);// 设置鲁棒优化核函数
+			e->setRobustKernel(rk);// Set the robust optimization kernel function
 			rk->setDelta(thHuber2D);
 		    }
-		    e->fx = pKF->fx;// 迭代 求雅克比所需参数
+		    e->fx = pKF->fx;// Iteratively find the parameters required for Jacobian
 		    e->fy = pKF->fy;
 		    e->cx = pKF->cx;
 		    e->cy = pKF->cy;
 		    optimizer.addEdge(e);
 		}
-      // 【9】对于双目相机和 深度相机      
+      		// 【9】For binocular and depth cameras      
 		else
 		{
-		    Eigen::Matrix<double,3,1> obs;// 观测值 像素点坐标 以及 视差
-		    const float kp_ur = pKF->mvuRight[mit->second];//深度得到的视差 立体匹配得到的视差
+		    Eigen::Matrix<double,3,1> obs;// Observation pixel coordinates and parallax
+		    const float kp_ur = pKF->mvuRight[mit->second];//depth-derived parallax   disparity obtained by stereo matching
 		    obs << kpUn.pt.x, kpUn.pt.y, kp_ur;
 
-		    g2o::EdgeStereoSE3ProjectXYZ* e = new g2o::EdgeStereoSE3ProjectXYZ();// 双目 边类型
+		    g2o::EdgeStereoSE3ProjectXYZ* e = new g2o::EdgeStereoSE3ProjectXYZ();// binocular   edge type
 
-		    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id)));// 对应的地图点
-		    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKF->mnId)));// 对应的关键帧 
-		    e->setMeasurement(obs);// 观测值
-		    const float &invSigma2 = pKF->mvInvLevelSigma2[kpUn.octave];// 误差权重
-		    Eigen::Matrix3d Info = Eigen::Matrix3d::Identity()*invSigma2;// 误差权重
-		    // 观测值为 3个值 像素点坐标 和视差   所以 误差权重矩阵 为3*3
-		    e->setInformation(Info);// 信息矩阵  误差权重矩阵
+		    e->setVertex(0, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(id)));// corresponding map point
+		    e->setVertex(1, dynamic_cast<g2o::OptimizableGraph::Vertex*>(optimizer.vertex(pKF->mnId)));// corresponding key frame
+		    e->setMeasurement(obs);// observations
+		    const float &invSigma2 = pKF->mvInvLevelSigma2[kpUn.octave];// error weight
+		    Eigen::Matrix3d Info = Eigen::Matrix3d::Identity()*invSigma2;// error weight
+		    // The observed value is 3 values, pixel coordinates and parallax, so the error weight matrix is 3*3
+		    e->setInformation(Info);// information matrix  error weight matrix
 
 		    if(bRobust)
 		    {
 			g2o::RobustKernelHuber* rk = new g2o::RobustKernelHuber;
-			e->setRobustKernel(rk);// 鲁棒优化 核函数
-			rk->setDelta(thHuber3D);// 系数
+			e->setRobustKernel(rk);// Robust optimization kernel function
+			rk->setDelta(thHuber3D);// coefficient
 		    }
 
 		    e->fx = pKF->fx;
 		    e->fy = pKF->fy;
 		    e->cx = pKF->cx;
 		    e->cy = pKF->cy;
-		    e->bf = pKF->mbf;// 视差优化 是 需要的 参数
+		    e->bf = pKF->mbf;// Parallax optimization is a required parameter
 
 		    optimizer.addEdge(e);
 		}
 	    }
 
-	    if(nEdges==0)// 边的数量为0 没有地图点
+	    if(nEdges==0)// The number of edges is 0, and there are no map points
 	    {
 		optimizer.removeVertex(vPoint);
 		vbNotIncludedMP[i]=true;
@@ -283,15 +283,15 @@ namespace ORB_SLAM2
 		vbNotIncludedMP[i]=false;
 	    }
 	}
-// 步骤4： 开始迭代优化
+	// Step 4: Start iterative optimization
 	// Optimize!
-	optimizer.initializeOptimization();//初始化
-	optimizer.optimize(nIterations);// 优化迭代
+	optimizer.initializeOptimization();//initialization
+	optimizer.optimize(nIterations);// optimization iteration
 
-    // Recover optimized data
- // 步骤5：得到优化的结果 从优化结果 更新数据
+    	// Recover optimized data
+ 	// Step 5: Get the optimized results From the optimized results, update the data
 	//Keyframes
-     // 步骤5.1： 更新 帧 位姿
+     	// Step 5.1: Update Frame Pose
 	for(size_t i=0; i<vpKFs.size(); i++)
 	{
 	    KeyFrame* pKF = vpKFs[i];
@@ -301,7 +301,7 @@ namespace ORB_SLAM2
 	    g2o::SE3Quat SE3quat = vSE3->estimate();
 	    if(nLoopKF==0)
 	    {
-		pKF->SetPose(Converter::toCvMat(SE3quat));// 更新 帧位姿
+		pKF->SetPose(Converter::toCvMat(SE3quat));// update frame pose
 	    }
 	    else
 	    {
@@ -310,23 +310,23 @@ namespace ORB_SLAM2
 		pKF->mnBAGlobalForKF = nLoopKF;
 	    }
 	}
-     // 步骤5.2： 更新地图点
+     	// Step 5.2: Update map points
 	for(size_t i=0; i<vpMP.size(); i++)
 	{
 	    if(vbNotIncludedMP[i])
 		continue;
 
-	    MapPoint* pMP = vpMP[i];// 地图点
+	    MapPoint* pMP = vpMP[i];// map point
 
 	    if(pMP->isBad())
 		continue;
-	    // 优化后的地图点
+	    // Optimized map points
 	    g2o::VertexSBAPointXYZ* vPoint = static_cast<g2o::VertexSBAPointXYZ*>(optimizer.vertex(pMP->mnId+maxKFid+1));
 
 	    if(nLoopKF==0)
 	    {
-		pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));// 设置 3d坐标
-		pMP->UpdateNormalAndDepth();// 更新 距离相机中心距离 等信息
+		pMP->SetWorldPos(Converter::toCvMat(vPoint->estimate()));// set 3d coordinates
+		pMP->UpdateNormalAndDepth();// Update information such as distance from camera center
 	    }
 	    else
 	    {
